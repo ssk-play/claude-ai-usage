@@ -146,15 +146,12 @@ async function refreshStatus() {
 
   html += `<div>체크 간격: ${config.interval || 5}분</div>`;
 
-  if (local.prevState?.models && Object.keys(local.prevState.models).length > 0) {
-    html += '<div style="margin-top:8px"><b>모델별 사용량:</b></div>';
-    for (const [model, data] of Object.entries(local.prevState.models)) {
-      html += `<div class="model-row"><span class="model-name">${model}</span><span class="model-usage">${data.usage}</span></div>`;
-    }
-  }
-
-  if (local.prevState?.overallUsage) {
-    html += `<div style="margin-top:4px">전체: <b>${local.prevState.overallUsage}</b></div>`;
+  const st = local.prevState;
+  if (st?.session || st?.weeklyAll || st?.weeklySonnet) {
+    html += '<div style="margin-top:8px"><b>사용량:</b></div>';
+    if (st.session) html += `<div class="model-row"><span class="model-name">session</span><span class="model-usage">${st.session}</span></div>`;
+    if (st.weeklyAll) html += `<div class="model-row"><span class="model-name">weekly-all</span><span class="model-usage">${st.weeklyAll}</span></div>`;
+    if (st.weeklySonnet != null) html += `<div class="model-row"><span class="model-name">weekly-sonnet</span><span class="model-usage">${st.weeklySonnet}</span></div>`;
   }
 
   el.innerHTML = html || '대기 중...';
