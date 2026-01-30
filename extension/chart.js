@@ -6,7 +6,7 @@ const SERIES_CONFIG = [
   { key: 'weeklySonnet',  label: 'weekly-sonnet',  color: '#50b83c' },
 ];
 
-function drawUsageChart(canvas, history, days) {
+function drawUsageChart(canvas, history, days, trackConfig) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -23,9 +23,11 @@ function drawUsageChart(canvas, history, days) {
   const filtered = history.filter(h => new Date(h.timestamp).getTime() > cutoff);
   if (filtered.length === 0) return null;
 
-  // Build series
+  // Build series (only tracked)
+  const trackMap = { session: 'trackSession', weeklyAll: 'trackWeeklyAll', weeklySonnet: 'trackWeeklySonnet' };
   const series = {};
   for (const cfg of SERIES_CONFIG) {
+    if (trackConfig && !trackConfig[trackMap[cfg.key]]) continue;
     const pts = [];
     for (const entry of filtered) {
       const val = entry[cfg.key];
@@ -89,6 +91,7 @@ function drawUsageChart(canvas, history, days) {
   // Lines
   const legends = [];
   for (const cfg of SERIES_CONFIG) {
+    if (trackConfig && !trackConfig[trackMap[cfg.key]]) continue;
     const pts = series[cfg.key];
     if (!pts) continue;
 

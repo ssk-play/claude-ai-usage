@@ -81,7 +81,12 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
     if (!prevState) throw new Error('저장된 데이터 없음. "지금 체크"를 먼저 눌러주세요.');
 
     const { prevPrevState } = await chrome.storage.local.get('prevPrevState');
-    const msg = buildReport('현황', prevState, prevPrevState);
+    const trackConfig = await chrome.storage.sync.get(['trackSession', 'trackWeeklyAll', 'trackWeeklySonnet']);
+    const msg = buildReport('현황', prevState, prevPrevState, {
+      trackSession: trackConfig.trackSession ?? false,
+      trackWeeklyAll: trackConfig.trackWeeklyAll ?? true,
+      trackWeeklySonnet: trackConfig.trackWeeklySonnet ?? false,
+    });
 
     const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
     const res = await fetch(url, {
@@ -162,8 +167,14 @@ async function refreshChart() {
   const legendEl = document.getElementById('chartLegend');
   const emptyEl = document.getElementById('chartEmpty');
   const days = parseInt(document.getElementById('chartRange').value);
+  const tc = await chrome.storage.sync.get(['trackSession', 'trackWeeklyAll', 'trackWeeklySonnet']);
+  const trackConfig = {
+    trackSession: tc.trackSession ?? false,
+    trackWeeklyAll: tc.trackWeeklyAll ?? true,
+    trackWeeklySonnet: tc.trackWeeklySonnet ?? false,
+  };
 
-  const legends = drawUsageChart(canvas, history, days);
+  const legends = drawUsageChart(canvas, history, days, trackConfig);
 
   if (!legends) {
     canvas.style.display = 'none';

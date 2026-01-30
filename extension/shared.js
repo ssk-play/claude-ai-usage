@@ -1,16 +1,17 @@
 // ─── Shared report format (used by background.js and popup.js) ───
 
-function buildReport(title, currentState, previousState) {
+function buildReport(title, currentState, previousState, trackConfig) {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
   let msg = `Claude AI Usage ${title}\n${now}\n\n`;
 
   const lines = [
-    { label: 'session',       key: 'session' },
-    { label: 'weekly-all',    key: 'weeklyAll' },
-    { label: 'weekly-sonnet', key: 'weeklySonnet' },
+    { label: 'session',       key: 'session',       track: 'trackSession' },
+    { label: 'weekly-all',    key: 'weeklyAll',      track: 'trackWeeklyAll' },
+    { label: 'weekly-sonnet', key: 'weeklySonnet',   track: 'trackWeeklySonnet' },
   ];
 
-  for (const { label, key } of lines) {
+  for (const { label, key, track } of lines) {
+    if (trackConfig && !trackConfig[track]) continue;
     const cur = currentState?.[key] || null;
     const prev = previousState?.[key] || null;
     msg += _formatLine(label, cur, prev);

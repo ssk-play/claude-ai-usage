@@ -94,12 +94,13 @@ async function handleUsageData(data, tabId) {
   });
   await appendHistory(data);
 
-  // Check for changes
-  const hasChanged = detectChange(prevState, data);
+  // Check for changes (only tracked fields)
+  const config = await getConfig();
+  const hasChanged = detectChange(prevState, data, config);
 
   if (hasChanged) {
     console.log('[bg] Change detected!');
-    const report = buildReport('변동', data, prevState);
+    const report = buildReport('변동', data, prevState, config);
     await sendTelegram(report);
     await chrome.storage.local.set({ lastAlert: new Date().toISOString() });
   } else {
@@ -108,11 +109,16 @@ async function handleUsageData(data, tabId) {
 }
 
 // ─── Detect change ────────────────────────────────────────
-function detectChange(prev, curr) {
+function detectChange(prev, curr, config) {
   if (!prev) return true;
-  const keys = ['session', 'weeklyAll', 'weeklySonnet'];
-  for (const k of keys) {
-    if (prev[k] !== curr[k]) return true;
+  const trackMap = [
+    { key: 'session',      track: 'trackSession' },
+    { key: 'weeklyAll',    track: 'trackWeeklyAll' },
+    { key: 'weeklySonnet', track: 'trackWeeklySonnet' },
+  ];
+  for (const { key, track } of trackMap) {
+    if (config && !config[track]) continue;
+    if (prev[key] !== curr[key]) return true;
   }
   return false;
 }
@@ -129,7 +135,7 @@ async function sendCurrentReport() {
   const { prevState, prevPrevState } = await chrome.storage.local.get(['prevState', 'prevPrevState']);
   if (!prevState) return { ok: false, error: '저장된 데이터가 없습니다. "지금 체크" 버튼을 먼저 눌러주세요.' };
 
-  const report = buildReport('현황', prevState, prevPrevState);
+  const report = buildReport('현황', prevState, prevPrevState, config);
   const result = await sendTelegram(report);
   if (result?.ok) return { ok: true };
   return { ok: false, error: result?.error || 'Telegram 전송 실패' };
