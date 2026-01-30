@@ -2,13 +2,24 @@ const FIELDS = ['botToken', 'chatId', 'interval', 'trackSession', 'trackWeeklyAl
 const DEFAULTS = { interval: 5, trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false };
 
 // ─── Telegram toggle ──────────────────────────────────────
-document.getElementById('telegramToggle').addEventListener('click', () => {
+async function initTelegramToggle() {
+  const { telegramVerified } = await chrome.storage.local.get('telegramVerified');
   const body = document.getElementById('telegramBody');
   const arrow = document.querySelector('.toggle-arrow');
-  const open = body.style.display === 'none';
-  body.style.display = open ? 'block' : 'none';
-  arrow.classList.toggle('open', open);
-});
+
+  if (!telegramVerified) {
+    // 아직 성공한 적 없으면 펼쳐놓기
+    body.style.display = 'block';
+    arrow.classList.add('open');
+  }
+
+  document.getElementById('telegramToggle').addEventListener('click', () => {
+    const open = body.style.display === 'none';
+    body.style.display = open ? 'block' : 'none';
+    arrow.classList.toggle('open', open);
+  });
+}
+initTelegramToggle();
 
 // ─── Load config ──────────────────────────────────────────
 chrome.storage.sync.get(FIELDS, (data) => {
@@ -97,6 +108,13 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
     if (result.ok) {
       btn.textContent = '✅ 전송 완료';
       showToast('Telegram으로 리포트를 전송했습니다.');
+      // 최초 성공 시 토글 접기
+      const { telegramVerified } = await chrome.storage.local.get('telegramVerified');
+      if (!telegramVerified) {
+        await chrome.storage.local.set({ telegramVerified: true });
+        document.getElementById('telegramBody').style.display = 'none';
+        document.querySelector('.toggle-arrow').classList.remove('open');
+      }
     } else {
       throw new Error(`Telegram API: ${result.description}`);
     }
