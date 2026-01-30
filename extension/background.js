@@ -118,7 +118,7 @@ function detectChange(prev, curr) {
 // ─── Shared report builder ────────────────────────────────
 function buildReport(title, currentState, previousState) {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `📊 <b>Claude AI Usage ${title}</b>\n${now}\n\n`;
+  let msg = `Claude AI Usage ${title}\n${now}\n\n`;
 
   const lines = [
     { label: 'session',        keyword: 'session' },
