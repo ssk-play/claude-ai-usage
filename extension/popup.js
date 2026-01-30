@@ -1,25 +1,28 @@
 const FIELDS = ['botToken', 'chatId', 'interval', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet'];
 const DEFAULTS = { interval: 5, trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false };
 
-// ─── Telegram toggle ──────────────────────────────────────
-async function initTelegramToggle() {
-  const { telegramVerified } = await chrome.storage.local.get('telegramVerified');
-  const body = document.getElementById('telegramBody');
-  const arrow = document.querySelector('.toggle-arrow');
-
-  if (!telegramVerified) {
-    // 아직 성공한 적 없으면 펼쳐놓기
-    body.style.display = 'block';
-    arrow.classList.add('open');
+// ─── Init: show settings tab first if not configured ──────
+(async () => {
+  const config = await chrome.storage.sync.get(['botToken', 'chatId']);
+  if (!config.botToken || !config.chatId) {
+    switchTab('settings');
+  } else {
+    refreshChart();
   }
+})();
 
-  document.getElementById('telegramToggle').addEventListener('click', () => {
-    const open = body.style.display === 'none';
-    body.style.display = open ? 'block' : 'none';
-    arrow.classList.toggle('open', open);
+// ─── Tabs ─────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    switchTab(tab.dataset.tab);
   });
+});
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
+  if (name === 'status') refreshChart();
 }
-initTelegramToggle();
 
 // ─── Load config ──────────────────────────────────────────
 chrome.storage.sync.get(FIELDS, (data) => {
@@ -42,7 +45,6 @@ document.getElementById('saveBtn').addEventListener('click', () => {
     trackWeeklySonnet: document.getElementById('trackWeeklySonnet').checked,
   };
   chrome.storage.sync.set(config, () => {
-    // Update alarm in background
     chrome.runtime.sendMessage({ type: 'CONFIG_UPDATED', config }).catch(() => {});
     const status = document.getElementById('saveStatus');
     status.textContent = '✅ 저장됨';
@@ -50,7 +52,7 @@ document.getElementById('saveBtn').addEventListener('click', () => {
   });
 });
 
-// ─── Check now (fire-and-forget, no response needed) ──────
+// ─── Check now ────────────────────────────────────────────
 document.getElementById('checkBtn').addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'CHECK_NOW' }).catch(() => {});
   const btn = document.getElementById('checkBtn');
@@ -60,30 +62,27 @@ document.getElementById('checkBtn').addEventListener('click', () => {
     btn.textContent = '지금 체크';
     btn.disabled = false;
     refreshStatus();
+    refreshChart();
   }, 12000);
 });
 
-// ─── Send report (popup handles directly, no service worker) ──
+// ─── Send report ──────────────────────────────────────────
 document.getElementById('reportBtn').addEventListener('click', async () => {
   const btn = document.getElementById('reportBtn');
   btn.textContent = '전송 중...';
   btn.disabled = true;
 
   try {
-    // Read config directly from storage
     const config = await chrome.storage.sync.get(['botToken', 'chatId']);
     if (!config.botToken) throw new Error('Bot Token이 비어있습니다.');
     if (!config.chatId) throw new Error('Chat ID가 비어있습니다.');
 
-    // Read last state directly from storage
     const { prevState } = await chrome.storage.local.get('prevState');
     if (!prevState) throw new Error('저장된 데이터 없음. "지금 체크"를 먼저 눌러주세요.');
 
-    // Build report using shared buildReport()
     const { prevPrevState } = await chrome.storage.local.get('prevPrevState');
     const msg = buildReport('현황', prevState, prevPrevState);
 
-    // Send directly via Telegram API
     const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
     const res = await fetch(url, {
       method: 'POST',
@@ -100,12 +99,11 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
     if (result.ok) {
       btn.textContent = '✅ 전송 완료';
       showToast('Telegram으로 리포트를 전송했습니다.');
-      // 최초 성공 시 토글 접기
+      // 최초 성공 시 상태 탭으로 전환
       const { telegramVerified } = await chrome.storage.local.get('telegramVerified');
       if (!telegramVerified) {
         await chrome.storage.local.set({ telegramVerified: true });
-        document.getElementById('telegramBody').style.display = 'none';
-        document.querySelector('.toggle-arrow').classList.remove('open');
+        switchTab('status');
       }
     } else {
       throw new Error(`Telegram API: ${result.description}`);
@@ -121,7 +119,7 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
   }, 3000);
 });
 
-// ─── Status (read storage directly) ───────────────────────
+// ─── Status ───────────────────────────────────────────────
 async function refreshStatus() {
   const config = await chrome.storage.sync.get(['botToken', 'chatId', 'interval']);
   const local = await chrome.storage.local.get(['prevState', 'lastCheck', 'lastAlert']);
@@ -129,7 +127,7 @@ async function refreshStatus() {
   let html = '';
 
   if (!config.botToken || !config.chatId) {
-    html += '<div class="status-warn">⚠️ Telegram 설정 필요</div>';
+    html += '<div class="status-warn">⚠️ Telegram 설정 필요 → 설정 탭</div>';
   }
 
   if (local.lastCheck) {
@@ -157,32 +155,6 @@ async function refreshStatus() {
   el.innerHTML = html || '대기 중...';
 }
 
-function showToast(msg, isError = false) {
-  let toast = document.getElementById('toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'toast';
-    document.body.appendChild(toast);
-  }
-  toast.textContent = msg;
-  toast.className = 'toast ' + (isError ? 'toast-error' : 'toast-ok');
-  toast.style.display = 'block';
-  setTimeout(() => (toast.style.display = 'none'), 4000);
-}
-
-refreshStatus();
-
-// ─── Tabs ─────────────────────────────────────────────────
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
-    if (tab.dataset.tab === 'chart') refreshChart();
-  });
-});
-
 // ─── Chart ────────────────────────────────────────────────
 async function refreshChart() {
   const { history = [] } = await chrome.storage.local.get('history');
@@ -202,7 +174,6 @@ async function refreshChart() {
 
   canvas.style.display = 'block';
   emptyEl.style.display = 'none';
-
   legendEl.innerHTML = legends.map(l =>
     `<div class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.name}</div>`
   ).join('');
@@ -210,3 +181,19 @@ async function refreshChart() {
 }
 
 document.getElementById('chartRange').addEventListener('change', refreshChart);
+
+// ─── Toast ────────────────────────────────────────────────
+function showToast(msg, isError = false) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.className = 'toast ' + (isError ? 'toast-error' : 'toast-ok');
+  toast.style.display = 'block';
+  setTimeout(() => (toast.style.display = 'none'), 4000);
+}
+
+refreshStatus();

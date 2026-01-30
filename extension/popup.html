@@ -9,23 +9,47 @@
     <h1>📊 Claude Usage Monitor</h1>
 
     <div class="tabs">
-      <button class="tab active" data-tab="settings">설정</button>
-      <button class="tab" data-tab="chart">그래프</button>
+      <button class="tab active" data-tab="status">상태</button>
+      <button class="tab" data-tab="settings">설정</button>
+    </div>
+
+    <!-- Status Tab (상태 + 그래프 통합) -->
+    <div id="tab-status" class="tab-content active">
+      <div class="section">
+        <h2>현황</h2>
+        <div id="status">로딩 중...</div>
+      </div>
+
+      <div class="section btn-group">
+        <button id="checkBtn" class="primary">지금 체크</button>
+        <button id="reportBtn" class="secondary">📩 리포트 전송</button>
+      </div>
+
+      <div class="section">
+        <div class="chart-header">
+          <h2>사용량 추이</h2>
+          <select id="chartRange">
+            <option value="1">오늘</option>
+            <option value="3" selected>3일</option>
+            <option value="7">7일</option>
+          </select>
+        </div>
+        <canvas id="usageChart" width="288" height="200"></canvas>
+        <div id="chartLegend" class="chart-legend"></div>
+        <div id="chartEmpty" class="chart-empty" style="display:none">
+          데이터가 없습니다. 체크를 먼저 실행하세요.
+        </div>
+      </div>
     </div>
 
     <!-- Settings Tab -->
-    <div id="tab-settings" class="tab-content active">
+    <div id="tab-settings" class="tab-content">
       <div class="section">
-        <div class="collapsible" id="telegramToggle">
-          <h2>Telegram 설정</h2>
-          <span class="toggle-arrow">▶</span>
-        </div>
-        <div class="collapsible-body" id="telegramBody" style="display:none">
-          <label>Bot Token</label>
-          <input type="text" id="botToken" placeholder="123456:ABC-DEF..." />
-          <label>Chat ID</label>
-          <input type="text" id="chatId" placeholder="your_chat_id" />
-        </div>
+        <h2>Telegram</h2>
+        <label>Bot Token</label>
+        <input type="text" id="botToken" placeholder="123456:ABC-DEF..." />
+        <label>Chat ID</label>
+        <input type="text" id="chatId" placeholder="your_chat_id" />
       </div>
 
       <div class="section">
@@ -55,35 +79,6 @@
       <div class="section">
         <button id="saveBtn" class="primary">저장</button>
         <span id="saveStatus"></span>
-      </div>
-
-      <div class="section">
-        <h2>상태</h2>
-        <div id="status">로딩 중...</div>
-      </div>
-
-      <div class="section btn-group">
-        <button id="checkBtn" class="primary">지금 체크</button>
-        <button id="reportBtn" class="secondary">📩 리포트 전송</button>
-      </div>
-    </div>
-
-    <!-- Chart Tab -->
-    <div id="tab-chart" class="tab-content">
-      <div class="section">
-        <div class="chart-header">
-          <h2>일별 사용량</h2>
-          <select id="chartRange">
-            <option value="1">오늘</option>
-            <option value="3" selected>3일</option>
-            <option value="7">7일</option>
-          </select>
-        </div>
-        <canvas id="usageChart" width="288" height="200"></canvas>
-        <div id="chartLegend" class="chart-legend"></div>
-        <div id="chartEmpty" class="chart-empty" style="display:none">
-          데이터가 없습니다. 체크를 먼저 실행하세요.
-        </div>
       </div>
     </div>
   </div>
