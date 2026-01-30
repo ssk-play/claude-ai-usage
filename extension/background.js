@@ -95,7 +95,10 @@ async function handleUsageData(data, tabId) {
   const prevFiltered = prevState ? filterByConfig(prevState, config) : null;
   const diff = diffState(prevFiltered, filtered);
 
+  // Save previous state for diff display
+  const oldState = (await chrome.storage.local.get('prevState')).prevState;
   await chrome.storage.local.set({
+    prevPrevState: oldState || null,
     prevState: data,
     lastCheck: new Date().toISOString(),
   });
@@ -177,25 +180,28 @@ function diffState(prev, curr) {
 // ─── Format Report ────────────────────────────────────────
 function formatReport(diff, state, config) {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `📊 <b>Claude AI Usage 변동</b>\n⏰ ${now}\n\n`;
+  let msg = `📊 <b>Claude AI Usage 변동</b>\n${now}\n\n`;
 
   if (diff.isFirst) {
-    msg += `🆕 <b>모니터링 시작</b>\n`;
-    if (state.session) msg += `• 현재 세션: <b>${state.session.usage}</b>\n`;
-    if (state.models) {
-      for (const [model, data] of Object.entries(state.models)) {
-        msg += `• ${model}: <b>${data.usage}</b>\n`;
-      }
-    }
-    if (state.resetInfo) msg += `\n리셋: ${state.resetInfo}`;
-    return msg;
+    msg += `🆕 모니터링 시작\n`;
+    msg += formatLine('session', findUsage(state, 'session'), null);
+    msg += formatLine('weekly-all', findUsage(state, 'all'), null);
+    msg += formatLine('weekly-sonnet', findUsage(state, 'sonnet'), null);
+    return msg.trimEnd();
   }
 
   for (const change of diff.changes) {
-    msg += `📈 ${change.field}: <b>${change.from}</b> → <b>${change.to}</b>\n`;
+    const curNum = parseFloat(change.to);
+    const prevNum = parseFloat(change.from);
+    const diff2 = curNum - prevNum;
+    const sign = diff2 > 0 ? '+' : '';
+    if (!isNaN(diff2)) {
+      msg += `${change.field}: ${change.from} → <b>${change.to}</b> (${sign}${diff2})\n`;
+    } else {
+      msg += `${change.field}: ${change.from} → <b>${change.to}</b>\n`;
+    }
   }
-  if (state.resetInfo) msg += `\n리셋: ${state.resetInfo}`;
-  return msg;
+  return msg.trimEnd();
 }
 
 // ─── Send current state as report ─────────────────────────
@@ -204,24 +210,51 @@ async function sendCurrentReport() {
   if (!config.botToken) return { ok: false, error: 'Bot Token이 비어있습니다. 팝업에서 설정하세요.' };
   if (!config.chatId) return { ok: false, error: 'Chat ID가 비어있습니다. 팝업에서 설정하세요.' };
 
-  const { prevState } = await chrome.storage.local.get('prevState');
+  const { prevState, prevPrevState } = await chrome.storage.local.get(['prevState', 'prevPrevState']);
   if (!prevState) return { ok: false, error: '저장된 데이터가 없습니다. "지금 체크" 버튼을 먼저 눌러주세요.' };
 
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `📊 <b>Claude AI Usage 현황</b>\n⏰ ${now}\n\n`;
+  let msg = `📊 <b>Claude AI Usage 현황</b>\n${now}\n\n`;
 
-  if (prevState.session) msg += `🔹 현재 세션: <b>${prevState.session.usage}</b>\n`;
-  if (prevState.models) {
-    for (const [model, data] of Object.entries(prevState.models)) {
-      msg += `🔹 ${model}: <b>${data.usage}</b>\n`;
-    }
-  }
-  if (prevState.overallUsage) msg += `\n전체: <b>${prevState.overallUsage}</b>`;
-  if (prevState.resetInfo) msg += `\n리셋: ${prevState.resetInfo}`;
+  // Session
+  const session = findUsage(prevState, 'session');
+  const prevSession = prevPrevState ? findUsage(prevPrevState, 'session') : null;
+  msg += formatLine('session', session, prevSession);
 
-  const result = await sendTelegram(msg);
+  // Weekly All Models
+  const weeklyAll = findUsage(prevState, 'all');
+  const prevWeeklyAll = prevPrevState ? findUsage(prevPrevState, 'all') : null;
+  msg += formatLine('weekly-all', weeklyAll, prevWeeklyAll);
+
+  // Weekly Sonnet
+  const weeklySonnet = findUsage(prevState, 'sonnet');
+  const prevWeeklySonnet = prevPrevState ? findUsage(prevPrevState, 'sonnet') : null;
+  msg += formatLine('weekly-sonnet', weeklySonnet, prevWeeklySonnet);
+
+  const result = await sendTelegram(msg.trimEnd());
   if (result?.ok) return { ok: true };
   return { ok: false, error: result?.error || 'Telegram 전송 실패' };
+}
+
+function findUsage(state, keyword) {
+  if (!state?.models) return null;
+  for (const [key, val] of Object.entries(state.models)) {
+    if (key.toLowerCase().includes(keyword)) return val.usage;
+  }
+  if (keyword === 'session' && state.session) return state.session.usage;
+  return state.overallUsage || null;
+}
+
+function formatLine(label, current, previous) {
+  const cur = current || '0%';
+  if (previous && previous !== current) {
+    const curNum = parseFloat(cur);
+    const prevNum = parseFloat(previous);
+    const diff = curNum - prevNum;
+    const sign = diff > 0 ? '+' : '';
+    return `${label}: ${previous} → <b>${cur}</b> (${sign}${diff})\n`;
+  }
+  return `${label}: <b>${cur}</b>\n`;
 }
 
 // ─── Telegram ─────────────────────────────────────────────
