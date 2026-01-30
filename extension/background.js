@@ -1,0 +1,305 @@
+const ALARM_NAME = 'claude-usage-check';
+const DEFAULT_INTERVAL = 5;
+
+// ─── Alarm Setup ──────────────────────────────────────────
+chrome.runtime.onInstalled.addListener(async () => {
+  const { interval } = await chrome.storage.sync.get('interval');
+  const min = interval || DEFAULT_INTERVAL;
+  chrome.alarms.create(ALARM_NAME, { periodInMinutes: min });
+  console.log('[bg] Alarm set:', min, 'min interval');
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ALARM_NAME) {
+    console.log('[bg] Alarm fired, checking usage...');
+    checkUsage();
+  }
+});
+
+// ─── Message handler (single async wrapper) ───────────────
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  handleMessage(msg, sender)
+    .then(sendResponse)
+    .catch(e => sendResponse({ ok: false, error: `내부 에러: ${e.message}` }));
+  return true; // Always async
+});
+
+async function handleMessage(msg, sender) {
+  switch (msg.type) {
+    case 'USAGE_DATA':
+      await handleUsageData(msg.data, sender.tab?.id);
+      return { ok: true };
+
+    case 'CHECK_NOW':
+      await checkUsage();
+      return { ok: true };
+
+    case 'GET_STATUS':
+      return await getStatus();
+
+    case 'SEND_REPORT':
+      return await sendCurrentReport();
+
+    case 'CONFIG_UPDATED':
+      await updateAlarm(msg.config.interval);
+      return { ok: true };
+
+    default:
+      return { ok: false, error: `알 수 없는 메시지 타입: ${msg.type}` };
+  }
+}
+
+// ─── Update alarm interval ───────────────────────────────
+async function updateAlarm(minutes) {
+  const min = minutes || DEFAULT_INTERVAL;
+  await chrome.alarms.clear(ALARM_NAME);
+  chrome.alarms.create(ALARM_NAME, { periodInMinutes: min });
+  console.log('[bg] Alarm updated:', min, 'min');
+}
+
+// ─── Check Usage ──────────────────────────────────────────
+async function checkUsage() {
+  const config = await getConfig();
+  if (!config.botToken || !config.chatId) {
+    console.warn('[bg] Telegram not configured.');
+    return;
+  }
+
+  try {
+    const tab = await chrome.tabs.create({
+      url: 'https://claude.ai/settings/usage',
+      active: false,
+    });
+    console.log('[bg] Opened tab:', tab.id);
+
+    setTimeout(async () => {
+      try { await chrome.tabs.remove(tab.id); } catch (e) {}
+    }, 30000);
+  } catch (e) {
+    console.error('[bg] Failed to open tab:', e);
+  }
+}
+
+// ─── Handle scraped data ──────────────────────────────────
+async function handleUsageData(data, tabId) {
+  console.log('[bg] Received usage data:', data);
+
+  if (tabId) {
+    try { await chrome.tabs.remove(tabId); } catch (e) {}
+  }
+
+  const config = await getConfig();
+  const { prevState } = await chrome.storage.local.get('prevState');
+
+  const filtered = filterByConfig(data, config);
+  const prevFiltered = prevState ? filterByConfig(prevState, config) : null;
+  const diff = diffState(prevFiltered, filtered);
+
+  await chrome.storage.local.set({
+    prevState: data,
+    lastCheck: new Date().toISOString(),
+  });
+
+  // Save to history
+  await appendHistory(data);
+
+  if (diff.changed) {
+    console.log('[bg] Change detected!', diff.changes);
+    const report = formatReport(diff, filtered, config);
+    await sendTelegram(report);
+    await chrome.storage.local.set({ lastAlert: new Date().toISOString() });
+  } else {
+    console.log('[bg] No change.');
+  }
+}
+
+// ─── Filter by tracking config ────────────────────────────
+function filterByConfig(data, config) {
+  const result = { ...data, models: {} };
+
+  if (config.trackSession && data.session) {
+    result.session = data.session;
+  }
+
+  if (data.models) {
+    for (const [key, val] of Object.entries(data.models)) {
+      const keyLower = key.toLowerCase();
+      if (config.trackWeeklyAll && keyLower.includes('all')) {
+        result.models[key] = val;
+      }
+      if (config.trackWeeklySonnet && keyLower.includes('sonnet')) {
+        result.models[key] = val;
+      }
+      if (config.trackSession && (keyLower.includes('session') || keyLower.includes('current'))) {
+        result.models[key] = val;
+      }
+    }
+  }
+
+  return result;
+}
+
+// ─── State Diff ───────────────────────────────────────────
+function diffState(prev, curr) {
+  if (!prev) return { changed: true, isFirst: true, changes: [] };
+
+  const changes = [];
+
+  if (prev.session?.usage !== curr.session?.usage) {
+    if (curr.session) {
+      changes.push({ field: '현재 세션', from: prev.session?.usage || '?', to: curr.session.usage });
+    }
+  }
+
+  const allModels = new Set([
+    ...Object.keys(curr.models || {}),
+    ...Object.keys(prev.models || {}),
+  ]);
+  for (const model of allModels) {
+    const p = prev.models?.[model];
+    const c = curr.models?.[model];
+    if (!p && c) {
+      changes.push({ field: model, from: '(new)', to: c.usage });
+    } else if (p && c && p.usage !== c.usage) {
+      changes.push({ field: model, from: p.usage, to: c.usage });
+    }
+  }
+
+  if (changes.length === 0 && prev.overallUsage !== curr.overallUsage) {
+    if (curr.overallUsage) {
+      changes.push({ field: '전체', from: prev.overallUsage || '?', to: curr.overallUsage });
+    }
+  }
+
+  return { changed: changes.length > 0, isFirst: false, changes };
+}
+
+// ─── Format Report ────────────────────────────────────────
+function formatReport(diff, state, config) {
+  const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+  let msg = `📊 <b>Claude AI Usage 변동</b>\n⏰ ${now}\n\n`;
+
+  if (diff.isFirst) {
+    msg += `🆕 <b>모니터링 시작</b>\n`;
+    if (state.session) msg += `• 현재 세션: <b>${state.session.usage}</b>\n`;
+    if (state.models) {
+      for (const [model, data] of Object.entries(state.models)) {
+        msg += `• ${model}: <b>${data.usage}</b>\n`;
+      }
+    }
+    if (state.resetInfo) msg += `\n리셋: ${state.resetInfo}`;
+    return msg;
+  }
+
+  for (const change of diff.changes) {
+    msg += `📈 ${change.field}: <b>${change.from}</b> → <b>${change.to}</b>\n`;
+  }
+  if (state.resetInfo) msg += `\n리셋: ${state.resetInfo}`;
+  return msg;
+}
+
+// ─── Send current state as report ─────────────────────────
+async function sendCurrentReport() {
+  const config = await getConfig();
+  if (!config.botToken) return { ok: false, error: 'Bot Token이 비어있습니다. 팝업에서 설정하세요.' };
+  if (!config.chatId) return { ok: false, error: 'Chat ID가 비어있습니다. 팝업에서 설정하세요.' };
+
+  const { prevState } = await chrome.storage.local.get('prevState');
+  if (!prevState) return { ok: false, error: '저장된 데이터가 없습니다. "지금 체크" 버튼을 먼저 눌러주세요.' };
+
+  const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+  let msg = `📊 <b>Claude AI Usage 현황</b>\n⏰ ${now}\n\n`;
+
+  if (prevState.session) msg += `🔹 현재 세션: <b>${prevState.session.usage}</b>\n`;
+  if (prevState.models) {
+    for (const [model, data] of Object.entries(prevState.models)) {
+      msg += `🔹 ${model}: <b>${data.usage}</b>\n`;
+    }
+  }
+  if (prevState.overallUsage) msg += `\n전체: <b>${prevState.overallUsage}</b>`;
+  if (prevState.resetInfo) msg += `\n리셋: ${prevState.resetInfo}`;
+
+  const result = await sendTelegram(msg);
+  if (result?.ok) return { ok: true };
+  return { ok: false, error: result?.error || 'Telegram 전송 실패' };
+}
+
+// ─── Telegram ─────────────────────────────────────────────
+async function sendTelegram(text) {
+  const config = await getConfig();
+  if (!config.botToken) return { ok: false, error: 'Bot Token 없음' };
+  if (!config.chatId) return { ok: false, error: 'Chat ID 없음' };
+
+  const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: config.chatId,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      console.log('[bg] Telegram: sent');
+      return { ok: true };
+    } else {
+      console.error('[bg] Telegram failed:', data.description);
+      return { ok: false, error: `Telegram API: ${data.description}` };
+    }
+  } catch (e) {
+    console.error('[bg] Telegram error:', e);
+    return { ok: false, error: `네트워크 에러: ${e.message}` };
+  }
+}
+
+// ─── History ──────────────────────────────────────────────
+async function appendHistory(data) {
+  const { history = [] } = await chrome.storage.local.get('history');
+
+  history.push({
+    timestamp: data.timestamp || new Date().toISOString(),
+    models: data.models || {},
+    overallUsage: data.overallUsage || null,
+    session: data.session || null,
+  });
+
+  // Keep last 7 days only (max ~2016 entries at 5min interval)
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const trimmed = history.filter(h => new Date(h.timestamp).getTime() > cutoff);
+
+  await chrome.storage.local.set({ history: trimmed });
+}
+
+// ─── Config ───────────────────────────────────────────────
+async function getConfig() {
+  const data = await chrome.storage.sync.get([
+    'botToken', 'chatId', 'interval',
+    'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet',
+  ]);
+  return {
+    botToken: data.botToken || '',
+    chatId: data.chatId || '',
+    interval: data.interval || DEFAULT_INTERVAL,
+    trackSession: data.trackSession ?? false,
+    trackWeeklyAll: data.trackWeeklyAll ?? true,
+    trackWeeklySonnet: data.trackWeeklySonnet ?? false,
+  };
+}
+
+async function getStatus() {
+  const { prevState, lastCheck, lastAlert } = await chrome.storage.local.get([
+    'prevState', 'lastCheck', 'lastAlert',
+  ]);
+  const config = await getConfig();
+  return {
+    configured: !!(config.botToken && config.chatId),
+    interval: config.interval,
+    lastCheck,
+    lastAlert,
+    prevState,
+  };
+}

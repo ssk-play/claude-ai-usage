@@ -1,0 +1,5 @@
+data/
+auth/
+.env
+*.log
+extension/icons/generate_icons.html

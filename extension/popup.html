@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>📊 Claude Usage Monitor</h1>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="settings">설정</button>
+      <button class="tab" data-tab="chart">그래프</button>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tab-settings" class="tab-content active">
+      <div class="section">
+        <div class="collapsible" id="telegramToggle">
+          <h2>Telegram 설정</h2>
+          <span class="toggle-arrow">▶</span>
+        </div>
+        <div class="collapsible-body" id="telegramBody" style="display:none">
+          <label>Bot Token</label>
+          <input type="text" id="botToken" placeholder="123456:ABC-DEF..." />
+          <label>Chat ID</label>
+          <input type="text" id="chatId" placeholder="your_chat_id" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>체크 간격</h2>
+        <div class="inline">
+          <input type="number" id="interval" min="1" max="60" value="5" class="small" />
+          <span>분</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>비교 대상</h2>
+        <label class="checkbox">
+          <input type="checkbox" id="trackSession" />
+          현재 세션
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="trackWeeklyAll" checked />
+          주간 한도 — All Models
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="trackWeeklySonnet" />
+          주간 한도 — Sonnet Only
+        </label>
+      </div>
+
+      <div class="section">
+        <button id="saveBtn">저장</button>
+        <span id="saveStatus"></span>
+      </div>
+
+      <div class="section">
+        <h2>상태</h2>
+        <div id="status">로딩 중...</div>
+      </div>
+
+      <div class="section btn-group">
+        <button id="checkBtn" class="primary">지금 체크</button>
+        <button id="reportBtn" class="secondary">📩 리포트 전송</button>
+      </div>
+    </div>
+
+    <!-- Chart Tab -->
+    <div id="tab-chart" class="tab-content">
+      <div class="section">
+        <div class="chart-header">
+          <h2>일별 사용량</h2>
+          <select id="chartRange">
+            <option value="1">오늘</option>
+            <option value="3" selected>3일</option>
+            <option value="7">7일</option>
+          </select>
+        </div>
+        <canvas id="usageChart" width="288" height="200"></canvas>
+        <div id="chartLegend" class="chart-legend"></div>
+        <div id="chartEmpty" class="chart-empty" style="display:none">
+          데이터가 없습니다. 체크를 먼저 실행하세요.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="chart.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
