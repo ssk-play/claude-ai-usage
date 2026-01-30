@@ -1,3 +1,5 @@
+importScripts('shared.js');
+
 const ALARM_NAME = 'claude-usage-check';
 const DEFAULT_INTERVAL = 5;
 
@@ -108,32 +110,15 @@ async function handleUsageData(data, tabId) {
 // ─── Detect change ────────────────────────────────────────
 function detectChange(prev, curr) {
   if (!prev) return true;
-  const keys = ['session', 'all', 'sonnet'];
+  const keys = ['session', 'weeklyAll', 'weeklySonnet'];
   for (const k of keys) {
-    if (findUsage(prev, k) !== findUsage(curr, k)) return true;
+    if (prev[k] !== curr[k]) return true;
   }
   return false;
 }
 
-// ─── Shared report builder ────────────────────────────────
-function buildReport(title, currentState, previousState) {
-  const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `Claude AI Usage ${title}\n${now}\n\n`;
-
-  const lines = [
-    { label: 'session',        keyword: 'session' },
-    { label: 'weekly-all',     keyword: 'all' },
-    { label: 'weekly-sonnet',  keyword: 'sonnet' },
-  ];
-
-  for (const { label, keyword } of lines) {
-    const cur = findUsage(currentState, keyword);
-    const prev = previousState ? findUsage(previousState, keyword) : null;
-    msg += formatLine(label, cur, prev);
-  }
-
-  return msg.trimEnd();
-}
+// ─── Report uses shared buildReport() from shared.js ──────
+// buildReport() is loaded via importScripts or defined in shared.js
 
 // ─── Send current state as report ─────────────────────────
 async function sendCurrentReport() {
@@ -150,32 +135,7 @@ async function sendCurrentReport() {
   return { ok: false, error: result?.error || 'Telegram 전송 실패' };
 }
 
-// ─── Helpers ──────────────────────────────────────────────
-function findUsage(state, keyword) {
-  if (!state) return null;
-  if (state.models) {
-    for (const [key, val] of Object.entries(state.models)) {
-      if (key.toLowerCase().includes(keyword)) return val.usage;
-    }
-  }
-  if (keyword === 'session' && state.session) return state.session.usage;
-  return null;
-}
-
-function formatLine(label, current, previous) {
-  const cur = current || '0%';
-  if (previous && previous !== current) {
-    const curNum = parseFloat(cur);
-    const prevNum = parseFloat(previous);
-    const d = curNum - prevNum;
-    const sign = d > 0 ? '+' : '';
-    if (!isNaN(d)) {
-      return `${label}: ${previous} → <b>${cur}</b> (${sign}${d})\n`;
-    }
-    return `${label}: ${previous} → <b>${cur}</b>\n`;
-  }
-  return `${label}: <b>${cur}</b>\n`;
-}
+// shared.js functions are imported at the top via importScripts
 
 // ─── Telegram ─────────────────────────────────────────────
 async function sendTelegram(text) {
@@ -215,9 +175,9 @@ async function appendHistory(data) {
 
   history.push({
     timestamp: data.timestamp || new Date().toISOString(),
-    models: data.models || {},
-    overallUsage: data.overallUsage || null,
     session: data.session || null,
+    weeklyAll: data.weeklyAll || null,
+    weeklySonnet: data.weeklySonnet || null,
   });
 
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;

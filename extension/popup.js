@@ -79,17 +79,9 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
     const { prevState } = await chrome.storage.local.get('prevState');
     if (!prevState) throw new Error('저장된 데이터 없음. "지금 체크"를 먼저 눌러주세요.');
 
-    // Build report
-    const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-    let msg = `📊 <b>Claude AI Usage 현황</b>\n⏰ ${now}\n\n`;
-    if (prevState.session) msg += `🔹 현재 세션: <b>${prevState.session.usage}</b>\n`;
-    if (prevState.models) {
-      for (const [model, data] of Object.entries(prevState.models)) {
-        msg += `🔹 ${model}: <b>${data.usage}</b>\n`;
-      }
-    }
-    if (prevState.overallUsage) msg += `\n전체: <b>${prevState.overallUsage}</b>`;
-    if (prevState.resetInfo) msg += `\n리셋: ${prevState.resetInfo}`;
+    // Build report using shared buildReport()
+    const { prevPrevState } = await chrome.storage.local.get('prevPrevState');
+    const msg = buildReport('현황', prevState, prevPrevState);
 
     // Send directly via Telegram API
     const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
