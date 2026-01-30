@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   handleMessage(msg, sender)
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: `내부 에러: ${e.message}` }));
-  return true; // Always async
+  return true;
 });
 
 async function handleMessage(msg, sender) {
@@ -29,21 +29,16 @@ async function handleMessage(msg, sender) {
     case 'USAGE_DATA':
       await handleUsageData(msg.data, sender.tab?.id);
       return { ok: true };
-
     case 'CHECK_NOW':
       await checkUsage();
       return { ok: true };
-
     case 'GET_STATUS':
       return await getStatus();
-
     case 'SEND_REPORT':
       return await sendCurrentReport();
-
     case 'CONFIG_UPDATED':
       await updateAlarm(msg.config.interval);
       return { ok: true };
-
     default:
       return { ok: false, error: `알 수 없는 메시지 타입: ${msg.type}` };
   }
@@ -71,7 +66,6 @@ async function checkUsage() {
       active: false,
     });
     console.log('[bg] Opened tab:', tab.id);
-
     setTimeout(async () => {
       try { await chrome.tabs.remove(tab.id); } catch (e) {}
     }, 30000);
@@ -88,27 +82,22 @@ async function handleUsageData(data, tabId) {
     try { await chrome.tabs.remove(tabId); } catch (e) {}
   }
 
-  const config = await getConfig();
   const { prevState } = await chrome.storage.local.get('prevState');
 
-  const filtered = filterByConfig(data, config);
-  const prevFiltered = prevState ? filterByConfig(prevState, config) : null;
-  const diff = diffState(prevFiltered, filtered);
-
-  // Save previous state for diff display
-  const oldState = (await chrome.storage.local.get('prevState')).prevState;
+  // Save states
   await chrome.storage.local.set({
-    prevPrevState: oldState || null,
+    prevPrevState: prevState || null,
     prevState: data,
     lastCheck: new Date().toISOString(),
   });
-
-  // Save to history
   await appendHistory(data);
 
-  if (diff.changed) {
-    console.log('[bg] Change detected!', diff.changes);
-    const report = formatReport(diff, filtered, config);
+  // Check for changes
+  const hasChanged = detectChange(prevState, data);
+
+  if (hasChanged) {
+    console.log('[bg] Change detected!');
+    const report = buildReport('변동', data, prevState);
     await sendTelegram(report);
     await chrome.storage.local.set({ lastAlert: new Date().toISOString() });
   } else {
@@ -116,91 +105,33 @@ async function handleUsageData(data, tabId) {
   }
 }
 
-// ─── Filter by tracking config ────────────────────────────
-function filterByConfig(data, config) {
-  const result = { ...data, models: {} };
-
-  if (config.trackSession && data.session) {
-    result.session = data.session;
+// ─── Detect change ────────────────────────────────────────
+function detectChange(prev, curr) {
+  if (!prev) return true;
+  const keys = ['session', 'all', 'sonnet'];
+  for (const k of keys) {
+    if (findUsage(prev, k) !== findUsage(curr, k)) return true;
   }
-
-  if (data.models) {
-    for (const [key, val] of Object.entries(data.models)) {
-      const keyLower = key.toLowerCase();
-      if (config.trackWeeklyAll && keyLower.includes('all')) {
-        result.models[key] = val;
-      }
-      if (config.trackWeeklySonnet && keyLower.includes('sonnet')) {
-        result.models[key] = val;
-      }
-      if (config.trackSession && (keyLower.includes('session') || keyLower.includes('current'))) {
-        result.models[key] = val;
-      }
-    }
-  }
-
-  return result;
+  return false;
 }
 
-// ─── State Diff ───────────────────────────────────────────
-function diffState(prev, curr) {
-  if (!prev) return { changed: true, isFirst: true, changes: [] };
-
-  const changes = [];
-
-  if (prev.session?.usage !== curr.session?.usage) {
-    if (curr.session) {
-      changes.push({ field: '현재 세션', from: prev.session?.usage || '?', to: curr.session.usage });
-    }
-  }
-
-  const allModels = new Set([
-    ...Object.keys(curr.models || {}),
-    ...Object.keys(prev.models || {}),
-  ]);
-  for (const model of allModels) {
-    const p = prev.models?.[model];
-    const c = curr.models?.[model];
-    if (!p && c) {
-      changes.push({ field: model, from: '(new)', to: c.usage });
-    } else if (p && c && p.usage !== c.usage) {
-      changes.push({ field: model, from: p.usage, to: c.usage });
-    }
-  }
-
-  if (changes.length === 0 && prev.overallUsage !== curr.overallUsage) {
-    if (curr.overallUsage) {
-      changes.push({ field: '전체', from: prev.overallUsage || '?', to: curr.overallUsage });
-    }
-  }
-
-  return { changed: changes.length > 0, isFirst: false, changes };
-}
-
-// ─── Format Report ────────────────────────────────────────
-function formatReport(diff, state, config) {
+// ─── Shared report builder ────────────────────────────────
+function buildReport(title, currentState, previousState) {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `📊 <b>Claude AI Usage 변동</b>\n${now}\n\n`;
+  let msg = `📊 <b>Claude AI Usage ${title}</b>\n${now}\n\n`;
 
-  if (diff.isFirst) {
-    msg += `🆕 모니터링 시작\n`;
-    msg += formatLine('session', findUsage(state, 'session'), null);
-    msg += formatLine('weekly-all', findUsage(state, 'all'), null);
-    msg += formatLine('weekly-sonnet', findUsage(state, 'sonnet'), null);
-    return msg.trimEnd();
+  const lines = [
+    { label: 'session',        keyword: 'session' },
+    { label: 'weekly-all',     keyword: 'all' },
+    { label: 'weekly-sonnet',  keyword: 'sonnet' },
+  ];
+
+  for (const { label, keyword } of lines) {
+    const cur = findUsage(currentState, keyword);
+    const prev = previousState ? findUsage(previousState, keyword) : null;
+    msg += formatLine(label, cur, prev);
   }
 
-  for (const change of diff.changes) {
-    const curNum = parseFloat(change.to);
-    const prevNum = parseFloat(change.from);
-    const diff2 = curNum - prevNum;
-    const sign = diff2 > 0 ? '+' : '';
-    if (!isNaN(diff2)) {
-      msg += `${change.field}: ${change.from} → <b>${change.to}</b> (${sign}${diff2})\n`;
-    } else {
-      msg += `${change.field}: ${change.from} → <b>${change.to}</b>\n`;
-    }
-  }
   return msg.trimEnd();
 }
 
@@ -213,36 +144,22 @@ async function sendCurrentReport() {
   const { prevState, prevPrevState } = await chrome.storage.local.get(['prevState', 'prevPrevState']);
   if (!prevState) return { ok: false, error: '저장된 데이터가 없습니다. "지금 체크" 버튼을 먼저 눌러주세요.' };
 
-  const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `📊 <b>Claude AI Usage 현황</b>\n${now}\n\n`;
-
-  // Session
-  const session = findUsage(prevState, 'session');
-  const prevSession = prevPrevState ? findUsage(prevPrevState, 'session') : null;
-  msg += formatLine('session', session, prevSession);
-
-  // Weekly All Models
-  const weeklyAll = findUsage(prevState, 'all');
-  const prevWeeklyAll = prevPrevState ? findUsage(prevPrevState, 'all') : null;
-  msg += formatLine('weekly-all', weeklyAll, prevWeeklyAll);
-
-  // Weekly Sonnet
-  const weeklySonnet = findUsage(prevState, 'sonnet');
-  const prevWeeklySonnet = prevPrevState ? findUsage(prevPrevState, 'sonnet') : null;
-  msg += formatLine('weekly-sonnet', weeklySonnet, prevWeeklySonnet);
-
-  const result = await sendTelegram(msg.trimEnd());
+  const report = buildReport('현황', prevState, prevPrevState);
+  const result = await sendTelegram(report);
   if (result?.ok) return { ok: true };
   return { ok: false, error: result?.error || 'Telegram 전송 실패' };
 }
 
+// ─── Helpers ──────────────────────────────────────────────
 function findUsage(state, keyword) {
-  if (!state?.models) return null;
-  for (const [key, val] of Object.entries(state.models)) {
-    if (key.toLowerCase().includes(keyword)) return val.usage;
+  if (!state) return null;
+  if (state.models) {
+    for (const [key, val] of Object.entries(state.models)) {
+      if (key.toLowerCase().includes(keyword)) return val.usage;
+    }
   }
   if (keyword === 'session' && state.session) return state.session.usage;
-  return state.overallUsage || null;
+  return null;
 }
 
 function formatLine(label, current, previous) {
@@ -250,9 +167,12 @@ function formatLine(label, current, previous) {
   if (previous && previous !== current) {
     const curNum = parseFloat(cur);
     const prevNum = parseFloat(previous);
-    const diff = curNum - prevNum;
-    const sign = diff > 0 ? '+' : '';
-    return `${label}: ${previous} → <b>${cur}</b> (${sign}${diff})\n`;
+    const d = curNum - prevNum;
+    const sign = d > 0 ? '+' : '';
+    if (!isNaN(d)) {
+      return `${label}: ${previous} → <b>${cur}</b> (${sign}${d})\n`;
+    }
+    return `${label}: ${previous} → <b>${cur}</b>\n`;
   }
   return `${label}: <b>${cur}</b>\n`;
 }
@@ -300,10 +220,8 @@ async function appendHistory(data) {
     session: data.session || null,
   });
 
-  // Keep last 7 days only (max ~2016 entries at 5min interval)
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const trimmed = history.filter(h => new Date(h.timestamp).getTime() > cutoff);
-
   await chrome.storage.local.set({ history: trimmed });
 }
 
