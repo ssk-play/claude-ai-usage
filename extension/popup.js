@@ -27,31 +27,112 @@ function switchTab(name) {
 // ─── Load config ──────────────────────────────────────────
 chrome.storage.sync.get(FIELDS, (data) => {
   document.getElementById('botToken').value = data.botToken || '';
-  document.getElementById('chatId').value = data.chatId || '';
   document.getElementById('interval').value = data.interval || DEFAULTS.interval;
   document.getElementById('trackSession').checked = data.trackSession ?? DEFAULTS.trackSession;
   document.getElementById('trackWeeklyAll').checked = data.trackWeeklyAll ?? DEFAULTS.trackWeeklyAll;
   document.getElementById('trackWeeklySonnet').checked = data.trackWeeklySonnet ?? DEFAULTS.trackWeeklySonnet;
   document.getElementById('heartbeatEnabled').checked = data.heartbeatEnabled ?? DEFAULTS.heartbeatEnabled;
+
+  // Show current Chat ID status if configured
+  if (data.chatId) {
+    const statusEl = document.getElementById('telegramStatus');
+    statusEl.textContent = `✅ Chat ID 설정됨: ${data.chatId}`;
+    statusEl.className = 'help-text success';
+  }
+});
+
+// ─── Reset Token ──────────────────────────────────────────
+document.getElementById('resetTokenBtn').addEventListener('click', async () => {
+  const telegramStatus = document.getElementById('telegramStatus');
+
+  if (!confirm('Bot Token과 Chat ID를 초기화하시겠습니까?')) {
+    return;
+  }
+
+  await chrome.storage.sync.set({ botToken: '', chatId: '' });
+  document.getElementById('botToken').value = '';
+  telegramStatus.textContent = '🔄 초기화되었습니다.';
+  telegramStatus.className = 'help-text';
+
+  setTimeout(() => {
+    telegramStatus.textContent = '';
+  }, 2000);
 });
 
 // ─── Save config ──────────────────────────────────────────
-document.getElementById('saveBtn').addEventListener('click', () => {
-  const config = {
-    botToken: document.getElementById('botToken').value.trim(),
-    chatId: document.getElementById('chatId').value.trim(),
-    interval: parseInt(document.getElementById('interval').value) || DEFAULTS.interval,
-    trackSession: document.getElementById('trackSession').checked,
-    trackWeeklyAll: document.getElementById('trackWeeklyAll').checked,
-    trackWeeklySonnet: document.getElementById('trackWeeklySonnet').checked,
-    heartbeatEnabled: document.getElementById('heartbeatEnabled').checked,
-  };
-  chrome.storage.sync.set(config, () => {
-    chrome.runtime.sendMessage({ type: 'CONFIG_UPDATED', config }).catch(() => {});
-    const status = document.getElementById('saveStatus');
-    status.textContent = '✅ 저장됨';
-    setTimeout(() => (status.textContent = ''), 2000);
-  });
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('saveBtn');
+  const status = document.getElementById('saveStatus');
+  const telegramStatus = document.getElementById('telegramStatus');
+  const botToken = document.getElementById('botToken').value.trim();
+
+  if (!botToken) {
+    telegramStatus.textContent = '⚠️ Bot Token을 입력하세요.';
+    telegramStatus.className = 'help-text error';
+    return;
+  }
+
+  btn.textContent = '저장 중...';
+  btn.disabled = true;
+  telegramStatus.textContent = 'Chat ID 자동 가져오는 중...';
+  telegramStatus.className = 'help-text';
+
+  try {
+    // Get current chatId if exists
+    const currentConfig = await chrome.storage.sync.get(['chatId']);
+    let chatId = currentConfig.chatId || '';
+
+    // Try to auto-fetch chat ID
+    const url = `https://api.telegram.org/bot${botToken}/getUpdates`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.ok) {
+      throw new Error(`Bot Token이 유효하지 않습니다: ${data.description}`);
+    }
+
+    if (data.result && data.result.length > 0) {
+      // 가장 최근 메시지에서 chat_id 추출
+      const latestMessage = data.result[data.result.length - 1];
+      const newChatId = latestMessage.message?.chat?.id || latestMessage.my_chat_member?.chat?.id;
+      if (newChatId) {
+        chatId = String(newChatId);
+      }
+    }
+
+    if (!chatId) {
+      telegramStatus.textContent = '💬 봇에게 아무 메시지나 보낸 후 다시 저장하세요.';
+      telegramStatus.className = 'help-text info';
+      btn.textContent = '저장';
+      btn.disabled = false;
+      return;
+    }
+
+    // Save config with auto-fetched chatId
+    const config = {
+      botToken,
+      chatId,
+      interval: parseInt(document.getElementById('interval').value) || DEFAULTS.interval,
+      trackSession: document.getElementById('trackSession').checked,
+      trackWeeklyAll: document.getElementById('trackWeeklyAll').checked,
+      trackWeeklySonnet: document.getElementById('trackWeeklySonnet').checked,
+      heartbeatEnabled: document.getElementById('heartbeatEnabled').checked,
+    };
+
+    chrome.storage.sync.set(config, () => {
+      chrome.runtime.sendMessage({ type: 'CONFIG_UPDATED', config }).catch(() => {});
+      status.textContent = '✅ 저장됨';
+      telegramStatus.textContent = `✅ Chat ID 설정됨: ${chatId}`;
+      telegramStatus.className = 'help-text success';
+      setTimeout(() => (status.textContent = ''), 2000);
+    });
+  } catch (e) {
+    telegramStatus.textContent = `❌ ${e.message}`;
+    telegramStatus.className = 'help-text error';
+  } finally {
+    btn.textContent = '저장';
+    btn.disabled = false;
+  }
 });
 
 // ─── Check now ────────────────────────────────────────────
