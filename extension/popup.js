@@ -136,17 +136,37 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 });
 
 // ─── Check now ────────────────────────────────────────────
+let checkTimeout = null;
 document.getElementById('checkBtn').addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'CHECK_NOW' }).catch(() => {});
   const btn = document.getElementById('checkBtn');
   btn.textContent = '체크 중...';
   btn.disabled = true;
-  setTimeout(() => {
+
+  // Clear previous timeout
+  if (checkTimeout) clearTimeout(checkTimeout);
+
+  // Fallback timeout (20 seconds)
+  checkTimeout = setTimeout(() => {
     btn.textContent = '지금 체크';
     btn.disabled = false;
     refreshStatus();
     refreshChart();
   }, 12000);
+});
+
+// Listen for storage changes to re-enable button immediately
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.lastCheck) {
+    const btn = document.getElementById('checkBtn');
+    if (btn.disabled) {
+      if (checkTimeout) clearTimeout(checkTimeout);
+      btn.textContent = '지금 체크';
+      btn.disabled = false;
+      refreshStatus();
+      refreshChart();
+    }
+  }
 });
 
 // ─── Send report ──────────────────────────────────────────

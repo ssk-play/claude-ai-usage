@@ -68,8 +68,15 @@ async function checkUsage() {
       active: false,
     });
     console.log('[bg] Opened tab:', tab.id);
+
+    // Close tab after 30 seconds
     setTimeout(async () => {
-      try { await chrome.tabs.remove(tab.id); } catch (e) {}
+      try {
+        await chrome.tabs.remove(tab.id);
+        console.log('[bg] Closed tab:', tab.id);
+      } catch (e) {
+        // Tab already closed
+      }
     }, 30000);
   } catch (e) {
     console.error('[bg] Failed to open tab:', e);
@@ -80,8 +87,14 @@ async function checkUsage() {
 async function handleUsageData(data, tabId) {
   console.log('[bg] Received usage data:', data);
 
+  // Close tab immediately after receiving data
   if (tabId) {
-    try { await chrome.tabs.remove(tabId); } catch (e) {}
+    try {
+      await chrome.tabs.remove(tabId);
+      console.log('[bg] Closed tab after data received:', tabId);
+    } catch (e) {
+      // Tab already closed
+    }
   }
 
   const { prevState } = await chrome.storage.local.get('prevState');
