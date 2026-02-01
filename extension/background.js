@@ -103,9 +103,9 @@ async function handleUsageData(data, tabId) {
     const report = buildReport('변동', data, prevState, config);
     await sendTelegram(report);
     await chrome.storage.local.set({ lastAlert: new Date().toISOString() });
-  } else if (config.heartbeatEnabled) {
-    console.log('[bg] No change, sending heartbeat.');
-    const report = buildHeartbeatReport(data);
+  } else if (config.forceNotifyEnabled) {
+    console.log('[bg] No change, sending force notify.');
+    const report = buildForceReport(data);
     await sendTelegram(report);
   } else {
     console.log('[bg] No change.');
@@ -130,10 +130,10 @@ function detectChange(prev, curr, config) {
 // ─── Report uses shared buildReport() from shared.js ──────
 // buildReport() is loaded via importScripts or defined in shared.js
 
-// ─── Heartbeat report ─────────────────────────────────────
-function buildHeartbeatReport(data) {
+// ─── Force notify report ──────────────────────────────────
+function buildForceReport(data) {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `🫀 Heartbeat Check\n⏰ ${now}\n\n`;
+  let msg = `⚡ Force Check\n⏰ ${now}\n\n`;
   msg += `📊 Session: ${data.session || '0%'}\n`;
   msg += `📊 All Models: ${data.weeklyAll || '0%'}\n`;
   msg += `📊 Sonnet: ${data.weeklySonnet || '0%'}\n\n`;
@@ -211,7 +211,7 @@ async function getConfig() {
   const data = await chrome.storage.sync.get([
     'botToken', 'chatId', 'interval',
     'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet',
-    'heartbeatEnabled',
+    'forceNotifyEnabled',
   ]);
   return {
     botToken: data.botToken || '',
@@ -220,7 +220,7 @@ async function getConfig() {
     trackSession: data.trackSession ?? false,
     trackWeeklyAll: data.trackWeeklyAll ?? true,
     trackWeeklySonnet: data.trackWeeklySonnet ?? false,
-    heartbeatEnabled: data.heartbeatEnabled ?? false,
+    forceNotifyEnabled: data.forceNotifyEnabled ?? false,
   };
 }
 

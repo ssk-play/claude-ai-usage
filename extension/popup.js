@@ -1,5 +1,5 @@
-const FIELDS = ['botToken', 'chatId', 'interval', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'heartbeatEnabled'];
-const DEFAULTS = { interval: 5, trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false, heartbeatEnabled: false };
+const FIELDS = ['botToken', 'chatId', 'interval', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'forceNotifyEnabled'];
+const DEFAULTS = { interval: 5, trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false, forceNotifyEnabled: false };
 
 // ─── Init: show settings tab first if not configured ──────
 (async () => {
@@ -31,7 +31,7 @@ chrome.storage.sync.get(FIELDS, (data) => {
   document.getElementById('trackSession').checked = data.trackSession ?? DEFAULTS.trackSession;
   document.getElementById('trackWeeklyAll').checked = data.trackWeeklyAll ?? DEFAULTS.trackWeeklyAll;
   document.getElementById('trackWeeklySonnet').checked = data.trackWeeklySonnet ?? DEFAULTS.trackWeeklySonnet;
-  document.getElementById('heartbeatEnabled').checked = data.heartbeatEnabled ?? DEFAULTS.heartbeatEnabled;
+  document.getElementById('forceNotifyEnabled').checked = data.forceNotifyEnabled ?? DEFAULTS.forceNotifyEnabled;
 
   // Show current Chat ID status if configured
   if (data.chatId) {
@@ -116,7 +116,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       trackSession: document.getElementById('trackSession').checked,
       trackWeeklyAll: document.getElementById('trackWeeklyAll').checked,
       trackWeeklySonnet: document.getElementById('trackWeeklySonnet').checked,
-      heartbeatEnabled: document.getElementById('heartbeatEnabled').checked,
+      forceNotifyEnabled: document.getElementById('forceNotifyEnabled').checked,
     };
 
     chrome.storage.sync.set(config, () => {
