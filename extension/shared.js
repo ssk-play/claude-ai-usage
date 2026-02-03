@@ -2,7 +2,8 @@
 
 function buildReport(title, currentState, previousState, trackConfig) {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `Claude AI Usage ${title}\n${now}\n\n`;
+  const name = trackConfig?.reporterName ? ` [${trackConfig.reporterName}]` : '';
+  let msg = `Claude AI Usage ${title}${name}\n${now}\n\n`;
 
   const lines = [
     { label: 'session',       key: 'session',       track: 'trackSession' },

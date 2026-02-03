@@ -1,5 +1,5 @@
-const FIELDS = ['botToken', 'chatId', 'interval', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'forceNotifyEnabled'];
-const DEFAULTS = { interval: 5, trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false, forceNotifyEnabled: false };
+const FIELDS = ['botToken', 'chatId', 'interval', 'reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'forceNotifyEnabled'];
+const DEFAULTS = { interval: 5, reporterName: '', trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false, forceNotifyEnabled: false };
 
 // ─── Init: show settings tab first if not configured ──────
 (async () => {
@@ -27,6 +27,7 @@ function switchTab(name) {
 // ─── Load config ──────────────────────────────────────────
 chrome.storage.sync.get(FIELDS, (data) => {
   document.getElementById('botToken').value = data.botToken || '';
+  document.getElementById('reporterName').value = data.reporterName || DEFAULTS.reporterName;
   document.getElementById('interval').value = data.interval || DEFAULTS.interval;
   document.getElementById('trackSession').checked = data.trackSession ?? DEFAULTS.trackSession;
   document.getElementById('trackWeeklyAll').checked = data.trackWeeklyAll ?? DEFAULTS.trackWeeklyAll;
@@ -112,6 +113,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     const config = {
       botToken,
       chatId,
+      reporterName: document.getElementById('reporterName').value.trim(),
       interval: parseInt(document.getElementById('interval').value) || DEFAULTS.interval,
       trackSession: document.getElementById('trackSession').checked,
       trackWeeklyAll: document.getElementById('trackWeeklyAll').checked,
@@ -184,8 +186,9 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
     if (!prevState) throw new Error('저장된 데이터 없음. "지금 체크"를 먼저 눌러주세요.');
 
     const { prevPrevState } = await chrome.storage.local.get('prevPrevState');
-    const trackConfig = await chrome.storage.sync.get(['trackSession', 'trackWeeklyAll', 'trackWeeklySonnet']);
+    const trackConfig = await chrome.storage.sync.get(['reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet']);
     const msg = buildReport('현황', prevState, prevPrevState, {
+      reporterName: trackConfig.reporterName || '',
       trackSession: trackConfig.trackSession ?? false,
       trackWeeklyAll: trackConfig.trackWeeklyAll ?? true,
       trackWeeklySonnet: trackConfig.trackWeeklySonnet ?? false,

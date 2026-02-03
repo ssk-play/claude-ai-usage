@@ -118,7 +118,7 @@ async function handleUsageData(data, tabId) {
     await chrome.storage.local.set({ lastAlert: new Date().toISOString() });
   } else if (config.forceNotifyEnabled) {
     console.log('[bg] No change, sending force notify.');
-    const report = buildForceReport(data);
+    const report = buildForceReport(data, config.reporterName);
     await sendTelegram(report);
   } else {
     console.log('[bg] No change.');
@@ -144,9 +144,10 @@ function detectChange(prev, curr, config) {
 // buildReport() is loaded via importScripts or defined in shared.js
 
 // ─── Force notify report ──────────────────────────────────
-function buildForceReport(data) {
+function buildForceReport(data, reporterName) {
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  let msg = `⚡ Force Check\n⏰ ${now}\n\n`;
+  const name = reporterName ? ` [${reporterName}]` : '';
+  let msg = `⚡ Force Check${name}\n⏰ ${now}\n\n`;
   msg += `📊 Session: ${data.session || '0%'}\n`;
   msg += `📊 All Models: ${data.weeklyAll || '0%'}\n`;
   msg += `📊 Sonnet: ${data.weeklySonnet || '0%'}\n\n`;
@@ -222,7 +223,7 @@ async function appendHistory(data) {
 // ─── Config ───────────────────────────────────────────────
 async function getConfig() {
   const data = await chrome.storage.sync.get([
-    'botToken', 'chatId', 'interval',
+    'botToken', 'chatId', 'interval', 'reporterName',
     'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet',
     'forceNotifyEnabled',
   ]);
@@ -230,6 +231,7 @@ async function getConfig() {
     botToken: data.botToken || '',
     chatId: data.chatId || '',
     interval: data.interval || DEFAULT_INTERVAL,
+    reporterName: data.reporterName || '',
     trackSession: data.trackSession ?? false,
     trackWeeklyAll: data.trackWeeklyAll ?? true,
     trackWeeklySonnet: data.trackWeeklySonnet ?? false,
