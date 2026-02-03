@@ -27,6 +27,7 @@ function switchTab(name) {
 // ─── Load config ──────────────────────────────────────────
 chrome.storage.sync.get(FIELDS, (data) => {
   document.getElementById('botToken').value = data.botToken || '';
+  document.getElementById('chatId').value = data.chatId || '';
   document.getElementById('reporterName').value = data.reporterName || DEFAULTS.reporterName;
   document.getElementById('interval').value = data.interval || DEFAULTS.interval;
   document.getElementById('trackSession').checked = data.trackSession ?? DEFAULTS.trackSession;
@@ -52,6 +53,7 @@ document.getElementById('resetTokenBtn').addEventListener('click', async () => {
 
   await chrome.storage.sync.set({ botToken: '', chatId: '' });
   document.getElementById('botToken').value = '';
+  document.getElementById('chatId').value = '';
   telegramStatus.textContent = '🔄 초기화되었습니다.';
   telegramStatus.className = 'help-text';
 
@@ -79,11 +81,11 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   telegramStatus.className = 'help-text';
 
   try {
-    // Get current chatId if exists
-    const currentConfig = await chrome.storage.sync.get(['chatId']);
-    let chatId = currentConfig.chatId || '';
+    // 수동 입력된 Chat ID 우선 사용
+    const manualChatId = document.getElementById('chatId').value.trim();
+    let chatId = manualChatId;
 
-    // Try to auto-fetch chat ID
+    // Bot Token 유효성 검증
     const url = `https://api.telegram.org/bot${botToken}/getUpdates`;
     const res = await fetch(url);
     const data = await res.json();
@@ -92,17 +94,28 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       throw new Error(`Bot Token이 유효하지 않습니다: ${data.description}`);
     }
 
-    if (data.result && data.result.length > 0) {
-      // 가장 최근 메시지에서 chat_id 추출
-      const latestMessage = data.result[data.result.length - 1];
-      const newChatId = latestMessage.message?.chat?.id || latestMessage.my_chat_member?.chat?.id;
-      if (newChatId) {
-        chatId = String(newChatId);
+    // 수동 입력이 없을 때만 자동 추출 시도
+    if (!manualChatId) {
+      telegramStatus.textContent = 'Chat ID 자동 가져오는 중...';
+
+      if (data.result && data.result.length > 0) {
+        // 가장 최근 메시지에서 chat_id 추출
+        const latestMessage = data.result[data.result.length - 1];
+        const newChatId = latestMessage.message?.chat?.id || latestMessage.my_chat_member?.chat?.id;
+        if (newChatId) {
+          chatId = String(newChatId);
+        }
+      }
+
+      // 기존 저장된 값 fallback
+      if (!chatId) {
+        const currentConfig = await chrome.storage.sync.get(['chatId']);
+        chatId = currentConfig.chatId || '';
       }
     }
 
     if (!chatId) {
-      telegramStatus.textContent = '💬 봇에게 아무 메시지나 보낸 후 다시 저장하세요.';
+      telegramStatus.textContent = '💬 Chat ID를 입력하거나 봇에게 메시지를 보낸 후 다시 저장하세요.';
       telegramStatus.className = 'help-text info';
       btn.textContent = '저장';
       btn.disabled = false;
@@ -126,6 +139,8 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       status.textContent = '✅ 저장됨';
       telegramStatus.textContent = `✅ Chat ID 설정됨: ${chatId}`;
       telegramStatus.className = 'help-text success';
+      // 자동 추출된 경우 입력 필드에 반영
+      document.getElementById('chatId').value = chatId;
       setTimeout(() => (status.textContent = ''), 2000);
     });
   } catch (e) {
