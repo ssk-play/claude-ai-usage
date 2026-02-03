@@ -63,23 +63,36 @@ async function checkUsage() {
   }
 
   try {
+    // 기존 탭 재활용 시도
+    const { usageTabId } = await chrome.storage.local.get('usageTabId');
+    
+    if (usageTabId) {
+      try {
+        // 탭이 아직 있는지 확인
+        const existingTab = await chrome.tabs.get(usageTabId);
+        if (existingTab) {
+          // 탭 reload
+          await chrome.tabs.reload(usageTabId);
+          console.log('[bg] Reloaded existing tab:', usageTabId);
+          return;
+        }
+      } catch (e) {
+        // 탭이 이미 닫혔음, 새로 열기
+        console.log('[bg] Tab not found, creating new one');
+      }
+    }
+
+    // 새 탭 열기
     const tab = await chrome.tabs.create({
       url: 'https://claude.ai/settings/usage',
       active: false,
     });
-    console.log('[bg] Opened tab:', tab.id);
-
-    // Close tab after 30 seconds
-    setTimeout(async () => {
-      try {
-        await chrome.tabs.remove(tab.id);
-        console.log('[bg] Closed tab:', tab.id);
-      } catch (e) {
-        // Tab already closed
-      }
-    }, 30000);
+    console.log('[bg] Opened new tab:', tab.id);
+    
+    // 탭 ID 저장
+    await chrome.storage.local.set({ usageTabId: tab.id });
   } catch (e) {
-    console.error('[bg] Failed to open tab:', e);
+    console.error('[bg] Failed to check usage:', e);
   }
 }
 
@@ -87,14 +100,10 @@ async function checkUsage() {
 async function handleUsageData(data, tabId) {
   console.log('[bg] Received usage data:', data);
 
-  // Close tab immediately after receiving data
+  // 탭 재활용을 위해 닫지 않음 (탭 ID만 저장 유지)
   if (tabId) {
-    try {
-      await chrome.tabs.remove(tabId);
-      console.log('[bg] Closed tab after data received:', tabId);
-    } catch (e) {
-      // Tab already closed
-    }
+    await chrome.storage.local.set({ usageTabId: tabId });
+    console.log('[bg] Tab kept open for reuse:', tabId);
   }
 
   const { prevState } = await chrome.storage.local.get('prevState');
