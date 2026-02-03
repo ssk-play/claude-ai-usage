@@ -119,6 +119,7 @@ button.small { width: auto; font-size: 11px; }
   margin-top: 4px;
   line-height: 1.4;
 }
+.optional { font-weight: normal; color: #999; }
 .help-text.success { color: #4caf50; }
 .help-text.error { color: #f44336; }
 .help-text.info { color: #2196f3; }
