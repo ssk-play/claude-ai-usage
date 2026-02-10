@@ -169,24 +169,73 @@ document.getElementById('verifyTokenBtn').addEventListener('click', async () => 
 });
 
 
-// ─── Check now ────────────────────────────────────────────
-let checkTimeout = null;
-document.getElementById('checkBtn').addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'CHECK_NOW' }).catch(() => {});
-  const btn = document.getElementById('checkBtn');
+// ─── Send report (extracted) ──────────────────────────────
+async function sendReport() {
+  const config = await chrome.storage.sync.get(['botToken', 'chatId']);
+  if (!config.botToken) throw new Error('Bot Token이 비어있습니다.');
+  if (!config.chatId) throw new Error('Chat ID가 비어있습니다.');
+
+  const { prevState } = await chrome.storage.local.get('prevState');
+  if (!prevState) throw new Error('저장된 데이터 없음.');
+
+  const { prevPrevState } = await chrome.storage.local.get('prevPrevState');
+  const trackConfig = await chrome.storage.sync.get(['reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'trackAddOn']);
+  const msg = buildReport('현황', prevState, prevPrevState, {
+    reporterName: trackConfig.reporterName || '',
+    trackSession: trackConfig.trackSession ?? false,
+    trackWeeklyAll: trackConfig.trackWeeklyAll ?? true,
+    trackWeeklySonnet: trackConfig.trackWeeklySonnet ?? false,
+    trackAddOn: trackConfig.trackAddOn ?? false,
+  });
+
+  const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: config.chatId,
+      text: msg,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    }),
+  });
+  const result = await res.json();
+
+  if (!result.ok) {
+    throw new Error(`Telegram API: ${result.description}`);
+  }
+
+  // 최초 성공 시 상태 탭으로 전환
+  const { telegramVerified } = await chrome.storage.local.get('telegramVerified');
+  if (!telegramVerified) {
+    await chrome.storage.local.set({ telegramVerified: true });
+    switchTab('status');
+  }
+}
+
+// ─── Report button (check → send) ────────────────────────
+let pendingReport = false;
+let reportTimeout = null;
+
+document.getElementById('reportBtn').addEventListener('click', () => {
+  const btn = document.getElementById('reportBtn');
   btn.textContent = '체크 중...';
   btn.disabled = true;
+  pendingReport = true;
+
+  chrome.runtime.sendMessage({ type: 'CHECK_NOW' }).catch(() => {});
 
   // Clear previous timeout
-  if (checkTimeout) clearTimeout(checkTimeout);
+  if (reportTimeout) clearTimeout(reportTimeout);
 
   // Fallback timeout (20 seconds)
-  checkTimeout = setTimeout(() => {
-    btn.textContent = '지금 체크';
+  reportTimeout = setTimeout(() => {
+    pendingReport = false;
+    btn.textContent = '📩 리포트';
     btn.disabled = false;
     refreshStatus();
     refreshChart();
-  }, 12000);
+  }, 20000);
 });
 
 // Listen for storage changes to refresh status
@@ -198,74 +247,32 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 
   if (changes.lastCheck) {
-    const btn = document.getElementById('checkBtn');
-    if (btn.disabled) {
-      if (checkTimeout) clearTimeout(checkTimeout);
-      btn.textContent = '지금 체크';
-      btn.disabled = false;
-    }
     refreshChart();
-  }
-});
 
-// ─── Send report ──────────────────────────────────────────
-document.getElementById('reportBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('reportBtn');
-  btn.textContent = '전송 중...';
-  btn.disabled = true;
+    if (pendingReport) {
+      pendingReport = false;
+      if (reportTimeout) clearTimeout(reportTimeout);
 
-  try {
-    const config = await chrome.storage.sync.get(['botToken', 'chatId']);
-    if (!config.botToken) throw new Error('Bot Token이 비어있습니다.');
-    if (!config.chatId) throw new Error('Chat ID가 비어있습니다.');
+      const btn = document.getElementById('reportBtn');
+      btn.textContent = '전송 중...';
 
-    const { prevState } = await chrome.storage.local.get('prevState');
-    if (!prevState) throw new Error('저장된 데이터 없음. "지금 체크"를 먼저 눌러주세요.');
-
-    const { prevPrevState } = await chrome.storage.local.get('prevPrevState');
-    const trackConfig = await chrome.storage.sync.get(['reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'trackAddOn']);
-    const msg = buildReport('현황', prevState, prevPrevState, {
-      reporterName: trackConfig.reporterName || '',
-      trackSession: trackConfig.trackSession ?? false,
-      trackWeeklyAll: trackConfig.trackWeeklyAll ?? true,
-      trackWeeklySonnet: trackConfig.trackWeeklySonnet ?? false,
-      trackAddOn: trackConfig.trackAddOn ?? false,
-    });
-
-    const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: config.chatId,
-        text: msg,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
-    });
-    const result = await res.json();
-
-    if (result.ok) {
-      btn.textContent = '✅ 전송 완료';
-      showToast('Telegram으로 리포트를 전송했습니다.');
-      // 최초 성공 시 상태 탭으로 전환
-      const { telegramVerified } = await chrome.storage.local.get('telegramVerified');
-      if (!telegramVerified) {
-        await chrome.storage.local.set({ telegramVerified: true });
-        switchTab('status');
-      }
-    } else {
-      throw new Error(`Telegram API: ${result.description}`);
+      sendReport()
+        .then(() => {
+          btn.textContent = '✅ 완료';
+          showToast('Telegram으로 리포트를 전송했습니다.');
+        })
+        .catch((e) => {
+          btn.textContent = '❌ 실패';
+          showToast(`전송 실패: ${e.message}`, true);
+        })
+        .finally(() => {
+          setTimeout(() => {
+            btn.textContent = '📩 리포트';
+            btn.disabled = false;
+          }, 3000);
+        });
     }
-  } catch (e) {
-    btn.textContent = '❌ 실패';
-    showToast(`전송 실패: ${e.message}`, true);
   }
-
-  setTimeout(() => {
-    btn.textContent = '📩 리포트 전송';
-    btn.disabled = false;
-  }, 3000);
 });
 
 // ─── Status ───────────────────────────────────────────────
