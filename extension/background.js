@@ -62,8 +62,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   const url = tab.url || '';
   if (url.includes('/login') || (url.includes('claude.ai') && !url.includes('/settings/usage'))) {
-    console.warn('[bg] 로그인 리다이렉트 감지:', url);
-    await chrome.storage.local.set({ loginRequired: true, lastCheck: new Date().toISOString() });
+    console.warn('[bg] 페이지 확인 필요 (리다이렉트 감지):', url);
+    await chrome.storage.local.set({ pageUnavailable: true, lastCheck: new Date().toISOString() });
   }
 });
 
@@ -119,15 +119,15 @@ async function handleUsageData(data, tabId) {
     console.log('[bg] Tab kept open for reuse:', tabId);
   }
 
-  // 로그인 필요 (content.js에서 에러 페이지 감지)
-  if (data.loginRequired) {
-    console.warn('[bg] 로그인 필요: 에러 페이지 감지');
-    await chrome.storage.local.set({ loginRequired: true, lastCheck: new Date().toISOString() });
+  // 페이지 확인 필요 (에러 페이지 또는 로그인 리다이렉트)
+  if (data.pageUnavailable) {
+    console.warn('[bg] 페이지 확인 필요');
+    await chrome.storage.local.set({ pageUnavailable: true, lastCheck: new Date().toISOString() });
     return;
   }
 
-  // 정상 데이터 수신 시 로그인 필요 플래그 해제
-  await chrome.storage.local.remove('loginRequired');
+  // 정상 데이터 수신 시 플래그 해제
+  await chrome.storage.local.remove('pageUnavailable');
 
   // 파싱 실패 시 데이터 저장 및 리포팅 스킵
   if (data.parseFailed) {
