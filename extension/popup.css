@@ -65,8 +65,10 @@ input[type="text"]:focus, input[type="number"]:focus {
   outline: none;
   border-color: #c96442;
 }
-input.small { width: 60px; }
+input[type="number"].small { width: 60px; }
 .inline { display: flex; align-items: center; gap: 6px; }
+.check-interval-row { display: flex; align-items: center; gap: 6px; }
+
 .token-group {
   display: flex;
   align-items: center;
@@ -173,8 +175,9 @@ button.secondary {
   font-weight: 600;
 }
 button.secondary:hover { background: #fdf0eb; }
-.btn-group { display: flex; flex-direction: column; gap: 6px; }
-.btn-group button { margin-top: 0; }
+.btn-group { display: flex; gap: 6px; align-items: center; }
+.btn-group input[type="text"] { flex: 6; min-width: 0; }
+.btn-group button { margin-top: 0; flex: 3; }
 #saveStatus { font-size: 11px; color: #4caf50; margin-left: 8px; }
 #status {
   background: #fff;
@@ -206,12 +209,6 @@ button.secondary:hover { background: #fdf0eb; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Toggle Switch */
-.toggle-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-}
 .toggle-label { font-size: 13px; color: #1a1a1a; }
 .toggle-switch {
   position: relative;
