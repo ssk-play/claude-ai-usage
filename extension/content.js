@@ -8,11 +8,15 @@
   const data = extractUsage();
   console.log('[content] Extracted:', JSON.stringify(data));
 
-  if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
-    console.warn('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
-    chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, parseFailed: true } });
-  } else {
-    chrome.runtime.sendMessage({ type: 'USAGE_DATA', data });
+  try {
+    if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
+      console.warn('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
+      chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, parseFailed: true } });
+    } else {
+      chrome.runtime.sendMessage({ type: 'USAGE_DATA', data });
+    }
+  } catch (e) {
+    console.warn('[content] sendMessage 실패 (확장 컨텍스트 무효화):', e.message);
   }
 })();
 
