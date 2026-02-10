@@ -106,6 +106,12 @@ async function handleUsageData(data, tabId) {
     console.log('[bg] Tab kept open for reuse:', tabId);
   }
 
+  // 파싱 실패 시 데이터 저장 및 리포팅 스킵
+  if (data.parseFailed) {
+    console.warn('[bg] 파싱 실패: 데이터 저장 및 리포팅 건너뜀');
+    return;
+  }
+
   const { prevState } = await chrome.storage.local.get('prevState');
 
   // Save states
