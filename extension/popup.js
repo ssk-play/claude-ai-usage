@@ -63,10 +63,48 @@ document.getElementById('resetTokenBtn').addEventListener('click', async () => {
   }, 2000);
 });
 
-// ─── Save config ──────────────────────────────────────────
-document.getElementById('saveBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('saveBtn');
-  const status = document.getElementById('saveStatus');
+// ─── Auto-save helpers ────────────────────────────────────
+let debounceTimer = null;
+function debounce(fn, ms) {
+  return (...args) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function autoSaveConfig() {
+  const config = {
+    botToken: document.getElementById('botToken').value.trim(),
+    chatId: document.getElementById('chatId').value.trim(),
+    reporterName: document.getElementById('reporterName').value.trim(),
+    interval: parseInt(document.getElementById('interval').value) || DEFAULTS.interval,
+    trackSession: document.getElementById('trackSession').checked,
+    trackWeeklyAll: document.getElementById('trackWeeklyAll').checked,
+    trackWeeklySonnet: document.getElementById('trackWeeklySonnet').checked,
+    trackAddOn: document.getElementById('trackAddOn').checked,
+    forceNotifyEnabled: document.getElementById('forceNotifyEnabled').checked,
+  };
+  chrome.storage.sync.set(config, () => {
+    chrome.runtime.sendMessage({ type: 'CONFIG_UPDATED', config }).catch(() => {});
+  });
+}
+
+const debouncedAutoSave = debounce(autoSaveConfig, 500);
+
+// General fields: debounced auto-save on input/change
+['interval', 'reporterName'].forEach(id => {
+  document.getElementById(id).addEventListener('input', debouncedAutoSave);
+});
+['trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'trackAddOn', 'forceNotifyEnabled'].forEach(id => {
+  document.getElementById(id).addEventListener('change', debouncedAutoSave);
+});
+
+// Chat ID: auto-save on change
+document.getElementById('chatId').addEventListener('change', autoSaveConfig);
+
+// ─── Verify Token ─────────────────────────────────────────
+document.getElementById('verifyTokenBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('verifyTokenBtn');
   const telegramStatus = document.getElementById('telegramStatus');
   const botToken = document.getElementById('botToken').value.trim();
 
@@ -76,17 +114,12 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     return;
   }
 
-  btn.textContent = '저장 중...';
+  btn.textContent = '…';
   btn.disabled = true;
-  telegramStatus.textContent = 'Chat ID 자동 가져오는 중...';
+  telegramStatus.textContent = '토큰 확인 중...';
   telegramStatus.className = 'help-text';
 
   try {
-    // 수동 입력된 Chat ID 우선 사용
-    const manualChatId = document.getElementById('chatId').value.trim();
-    let chatId = manualChatId;
-
-    // Bot Token 유효성 검증
     const url = `https://api.telegram.org/bot${botToken}/getUpdates`;
     const res = await fetch(url);
     const data = await res.json();
@@ -95,16 +128,17 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       throw new Error(`Bot Token이 유효하지 않습니다: ${data.description}`);
     }
 
-    // 수동 입력이 없을 때만 자동 추출 시도
-    if (!manualChatId) {
-      telegramStatus.textContent = 'Chat ID 자동 가져오는 중...';
+    // 수동 입력된 Chat ID 우선 사용
+    let chatId = document.getElementById('chatId').value.trim();
 
+    // 수동 입력이 없을 때만 자동 추출 시도
+    if (!chatId) {
       if (data.result && data.result.length > 0) {
-        // 가장 최근 메시지에서 chat_id 추출
         const latestMessage = data.result[data.result.length - 1];
         const newChatId = latestMessage.message?.chat?.id || latestMessage.my_chat_member?.chat?.id;
         if (newChatId) {
           chatId = String(newChatId);
+          document.getElementById('chatId').value = chatId;
         }
       }
 
@@ -115,44 +149,25 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       }
     }
 
+    // 토큰 + chatId 저장
+    autoSaveConfig();
+
     if (!chatId) {
-      telegramStatus.textContent = '💬 Chat ID를 입력하거나 봇에게 메시지를 보낸 후 다시 저장하세요.';
+      telegramStatus.textContent = '✅ 토큰 유효. 💬 Chat ID를 입력하거나 봇에게 메시지를 보낸 후 다시 검증하세요.';
       telegramStatus.className = 'help-text info';
-      btn.textContent = '저장';
-      btn.disabled = false;
-      return;
-    }
-
-    // Save config with auto-fetched chatId
-    const config = {
-      botToken,
-      chatId,
-      reporterName: document.getElementById('reporterName').value.trim(),
-      interval: parseInt(document.getElementById('interval').value) || DEFAULTS.interval,
-      trackSession: document.getElementById('trackSession').checked,
-      trackWeeklyAll: document.getElementById('trackWeeklyAll').checked,
-      trackWeeklySonnet: document.getElementById('trackWeeklySonnet').checked,
-      trackAddOn: document.getElementById('trackAddOn').checked,
-      forceNotifyEnabled: document.getElementById('forceNotifyEnabled').checked,
-    };
-
-    chrome.storage.sync.set(config, () => {
-      chrome.runtime.sendMessage({ type: 'CONFIG_UPDATED', config }).catch(() => {});
-      status.textContent = '✅ 저장됨';
-      telegramStatus.textContent = `✅ Chat ID 설정됨: ${chatId}`;
+    } else {
+      telegramStatus.textContent = `✅ 토큰 유효 · Chat ID: ${chatId}`;
       telegramStatus.className = 'help-text success';
-      // 자동 추출된 경우 입력 필드에 반영
-      document.getElementById('chatId').value = chatId;
-      setTimeout(() => (status.textContent = ''), 2000);
-    });
+    }
   } catch (e) {
     telegramStatus.textContent = `❌ ${e.message}`;
     telegramStatus.className = 'help-text error';
   } finally {
-    btn.textContent = '저장';
+    btn.textContent = '✔';
     btn.disabled = false;
   }
 });
+
 
 // ─── Check now ────────────────────────────────────────────
 let checkTimeout = null;
