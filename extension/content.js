@@ -38,6 +38,9 @@ function extractUsage() {
     session: null,
     weeklyAll: null,
     weeklySonnet: null,
+    addOnUsed: null,
+    addOnPercent: null,
+    addOnBalance: null,
     rawText: body.substring(0, 5000),
     timestamp: new Date().toISOString(),
   };
@@ -83,6 +86,35 @@ function extractUsage() {
         data.weeklyAll = pctVal;
       } else if (ctxLower.match(/sonnet/) && !ctxLower.match(/all/) && !data.weeklySonnet) {
         data.weeklySonnet = pctVal;
+      }
+    }
+  }
+
+  // ─── 추가 사용량 (Add-on Usage) 파싱 ───
+  const addOnIdx = lines.findIndex(l => l.match(/추가\s*사용량/));
+  if (addOnIdx !== -1) {
+    for (let i = addOnIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      // "US$0.00 사용" 패턴 → 사용금액
+      const usedMatch = line.match(/(US\$[\d,.]+)\s*사용/);
+      if (usedMatch && !data.addOnUsed) {
+        data.addOnUsed = usedMatch[1];
+      }
+      // "0% 사용" 패턴 → 퍼센티지
+      const pctMatch = line.match(/(\d+(?:\.\d+)?)\s*%\s*사용/);
+      if (pctMatch && !data.addOnPercent) {
+        data.addOnPercent = pctMatch[1] + '%';
+      }
+      // "현재 잔액" 패턴 → 잔액
+      if (line.match(/현재\s*잔액/)) {
+        // 잔액은 이전 라인 또는 같은 라인에서 US$ 패턴 찾기
+        for (let j = Math.max(addOnIdx, i - 3); j <= i; j++) {
+          const balMatch = lines[j].match(/(US\$[\d,.]+)/);
+          if (balMatch && balMatch[1] !== data.addOnUsed) {
+            data.addOnBalance = balMatch[1];
+            break;
+          }
+        }
       }
     }
   }

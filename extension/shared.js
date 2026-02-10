@@ -18,14 +18,29 @@ function buildReport(title, currentState, previousState, trackConfig) {
     msg += _formatLine(label, cur, prev);
   }
 
+  // 추가 사용량
+  if (trackConfig?.trackAddOn) {
+    const addOnLines = [
+      { label: 'add-on-used',    key: 'addOnUsed' },
+      { label: 'add-on-percent', key: 'addOnPercent' },
+      { label: 'add-on-balance', key: 'addOnBalance' },
+    ];
+    msg += '\n';
+    for (const { label, key } of addOnLines) {
+      const cur = currentState?.[key] || null;
+      const prev = previousState?.[key] || null;
+      msg += _formatLine(label, cur, prev);
+    }
+  }
+
   return msg.trimEnd();
 }
 
 function _formatLine(label, current, previous) {
-  const cur = current || '0%';
+  const cur = current || '-';
   if (previous && previous !== current) {
-    const curNum = parseFloat(cur);
-    const prevNum = parseFloat(previous);
+    const curNum = parseFloat(cur.replace(/[^0-9.]/g, ''));
+    const prevNum = parseFloat(previous.replace(/[^0-9.]/g, ''));
     const d = curNum - prevNum;
     const sign = d > 0 ? '+' : '';
     if (!isNaN(d)) {
