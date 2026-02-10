@@ -21,6 +21,7 @@ function buildReport(title, currentState, previousState, trackConfig) {
   // 추가 사용량
   if (trackConfig?.trackAddOn) {
     const addOnLines = [
+      { label: 'add-on',         key: 'addOnEnabled' },
       { label: 'add-on-used',    key: 'addOnUsed' },
       { label: 'add-on-percent', key: 'addOnPercent' },
       { label: 'add-on-balance', key: 'addOnBalance' },

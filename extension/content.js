@@ -38,6 +38,7 @@ function extractUsage() {
     session: null,
     weeklyAll: null,
     weeklySonnet: null,
+    addOnEnabled: null,
     addOnUsed: null,
     addOnPercent: null,
     addOnBalance: null,
@@ -91,6 +92,23 @@ function extractUsage() {
   }
 
   // ─── 추가 사용량 (Add-on Usage) 파싱 ───
+  // 토글 상태 감지: "추가 사용량" 텍스트 근처의 toggle/switch 요소
+  const addOnToggle = document.querySelector('button[role="switch"], input[type="checkbox"]');
+  const addOnSection = [...document.querySelectorAll('h2, h3, [class*="heading"]')]
+    .find(el => el.textContent?.match(/추가\s*사용량/));
+  if (addOnSection) {
+    const container = addOnSection.closest('section') || addOnSection.parentElement?.parentElement;
+    if (container) {
+      const toggle = container.querySelector('button[role="switch"], input[type="checkbox"]');
+      if (toggle) {
+        const isOn = toggle.getAttribute('aria-checked') === 'true'
+          || toggle.checked === true
+          || toggle.getAttribute('data-state') === 'checked';
+        data.addOnEnabled = isOn ? 'ON' : 'OFF';
+      }
+    }
+  }
+
   const addOnIdx = lines.findIndex(l => l.match(/추가\s*사용량/));
   if (addOnIdx !== -1) {
     for (let i = addOnIdx + 1; i < lines.length; i++) {

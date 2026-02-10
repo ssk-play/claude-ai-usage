@@ -281,8 +281,8 @@ async function refreshStatus() {
     if (st.weeklySonnet != null) html += `<div class="model-row"><span class="model-name">weekly-sonnet</span><span class="model-usage">${st.weeklySonnet}</span></div>`;
   }
 
-  if (st?.addOnUsed || st?.addOnPercent || st?.addOnBalance) {
-    html += '<div style="margin-top:8px"><b>추가 사용량:</b></div>';
+  if (st?.addOnEnabled || st?.addOnUsed || st?.addOnPercent || st?.addOnBalance) {
+    html += `<div style="margin-top:8px"><b>추가 사용량: ${st.addOnEnabled || '-'}</b></div>`;
     if (st.addOnUsed) html += `<div class="model-row"><span class="model-name">사용금액</span><span class="model-usage">${st.addOnUsed} (${st.addOnPercent || '-'})</span></div>`;
     if (st.addOnBalance) html += `<div class="model-row"><span class="model-name">잔액</span><span class="model-usage">${st.addOnBalance}</span></div>`;
   }

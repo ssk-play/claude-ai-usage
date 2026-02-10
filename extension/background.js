@@ -147,6 +147,7 @@ function detectChange(prev, curr, config) {
     { key: 'session',      track: 'trackSession' },
     { key: 'weeklyAll',    track: 'trackWeeklyAll' },
     { key: 'weeklySonnet', track: 'trackWeeklySonnet' },
+    { key: 'addOnEnabled', track: 'trackAddOn' },
     { key: 'addOnUsed',    track: 'trackAddOn' },
     { key: 'addOnPercent', track: 'trackAddOn' },
     { key: 'addOnBalance', track: 'trackAddOn' },
@@ -169,8 +170,8 @@ function buildForceReport(data, reporterName) {
   msg += `📊 Session: ${data.session || '0%'}\n`;
   msg += `📊 All Models: ${data.weeklyAll || '0%'}\n`;
   msg += `📊 Sonnet: ${data.weeklySonnet || '0%'}\n`;
-  if (data.addOnUsed || data.addOnPercent || data.addOnBalance) {
-    msg += `\n💰 추가 사용량:\n`;
+  if (data.addOnEnabled || data.addOnUsed || data.addOnPercent || data.addOnBalance) {
+    msg += `\n💰 추가 사용량: ${data.addOnEnabled || '-'}\n`;
     msg += `  사용: ${data.addOnUsed || '-'} (${data.addOnPercent || '-'})\n`;
     msg += `  잔액: ${data.addOnBalance || '-'}\n`;
   }
@@ -236,6 +237,7 @@ async function appendHistory(data) {
     session: data.session || null,
     weeklyAll: data.weeklyAll || null,
     weeklySonnet: data.weeklySonnet || null,
+    addOnEnabled: data.addOnEnabled || null,
     addOnUsed: data.addOnUsed || null,
     addOnPercent: data.addOnPercent || null,
     addOnBalance: data.addOnBalance || null,
