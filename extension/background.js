@@ -54,6 +54,19 @@ async function updateAlarm(minutes) {
   console.log('[bg] Alarm updated:', min, 'min');
 }
 
+// ─── Login redirect detection ─────────────────────────────
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete') return;
+  const { usageTabId } = await chrome.storage.local.get('usageTabId');
+  if (tabId !== usageTabId) return;
+
+  const url = tab.url || '';
+  if (url.includes('/login') || (url.includes('claude.ai') && !url.includes('/settings/usage'))) {
+    console.warn('[bg] 페이지 확인 필요 (리다이렉트 감지):', url);
+    await chrome.storage.local.set({ pageUnavailable: true, lastCheck: new Date().toISOString() });
+  }
+});
+
 // ─── Check Usage ──────────────────────────────────────────
 async function checkUsage() {
   const config = await getConfig();
@@ -105,6 +118,16 @@ async function handleUsageData(data, tabId) {
     await chrome.storage.local.set({ usageTabId: tabId });
     console.log('[bg] Tab kept open for reuse:', tabId);
   }
+
+  // 페이지 확인 필요 (에러 페이지 또는 로그인 리다이렉트)
+  if (data.pageUnavailable) {
+    console.warn('[bg] 페이지 확인 필요');
+    await chrome.storage.local.set({ pageUnavailable: true, lastCheck: new Date().toISOString() });
+    return;
+  }
+
+  // 정상 데이터 수신 시 플래그 해제
+  await chrome.storage.local.remove('pageUnavailable');
 
   // 파싱 실패 시 데이터 저장 및 리포팅 스킵
   if (data.parseFailed) {

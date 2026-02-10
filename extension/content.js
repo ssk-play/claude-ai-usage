@@ -9,7 +9,13 @@
   console.log('[content] Extracted:', JSON.stringify(data));
 
   try {
-    if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
+    const bodyText = document.body?.innerText || '';
+    const isErrorPage = /페이지를 찾을 수 없습니다|not found|page not found|홈으로 돌아가기/i.test(bodyText);
+
+    if (isErrorPage) {
+      console.warn('[content] 페이지 이상 감지');
+      chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, pageUnavailable: true } });
+    } else if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
       console.warn('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
       chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, parseFailed: true } });
     } else {
@@ -26,6 +32,11 @@ function waitForContent() {
     const check = () => {
       attempts++;
       const body = document.body?.innerText || '';
+      // 에러 페이지 빠른 감지
+      if (/페이지를 찾을 수 없습니다|not found|홈으로 돌아가기/i.test(body)) {
+        setTimeout(resolve, 500);
+        return;
+      }
       if (body.includes('%') || attempts >= 30) {
         setTimeout(resolve, 3000);
         return;
