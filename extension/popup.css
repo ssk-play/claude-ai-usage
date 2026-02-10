@@ -29,6 +29,11 @@ body {
 }
 .tab:hover { color: #555; }
 .tab.active { color: #c96442; border-bottom-color: #c96442; }
+.tab.pulse { animation: tab-pulse 1.5s ease-in-out infinite; }
+@keyframes tab-pulse {
+  0%, 100% { color: #888; }
+  50% { color: #c96442; }
+}
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 

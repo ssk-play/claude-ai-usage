@@ -21,7 +21,17 @@ document.querySelectorAll('.tab').forEach(tab => {
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
-  if (name === 'status') refreshChart();
+  if (name === 'status') {
+    refreshChart();
+    document.querySelector('.tab[data-tab="status"]').classList.remove('pulse');
+  }
+  if (name === 'settings') updateStatusTabPulse();
+}
+
+async function updateStatusTabPulse() {
+  const config = await chrome.storage.sync.get(['botToken', 'chatId']);
+  const statusTab = document.querySelector('.tab[data-tab="status"]');
+  statusTab.classList.toggle('pulse', !!(config.botToken && config.chatId));
 }
 
 // ─── Load config ──────────────────────────────────────────
@@ -86,6 +96,7 @@ function autoSaveConfig() {
   };
   chrome.storage.sync.set(config, () => {
     chrome.runtime.sendMessage({ type: 'CONFIG_UPDATED', config }).catch(() => {});
+    updateStatusTabPulse();
   });
 }
 
