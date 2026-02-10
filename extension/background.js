@@ -119,6 +119,13 @@ async function handleUsageData(data, tabId) {
     console.log('[bg] Tab kept open for reuse:', tabId);
   }
 
+  // 로그인 필요 (content.js에서 에러 페이지 감지)
+  if (data.loginRequired) {
+    console.warn('[bg] 로그인 필요: 에러 페이지 감지');
+    await chrome.storage.local.set({ loginRequired: true, lastCheck: new Date().toISOString() });
+    return;
+  }
+
   // 정상 데이터 수신 시 로그인 필요 플래그 해제
   await chrome.storage.local.remove('loginRequired');
 

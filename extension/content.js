@@ -9,7 +9,13 @@
   console.log('[content] Extracted:', JSON.stringify(data));
 
   try {
-    if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
+    const bodyText = document.body?.innerText || '';
+    const isErrorPage = /페이지를 찾을 수 없습니다|not found|page not found|홈으로 돌아가기/i.test(bodyText);
+
+    if (isErrorPage) {
+      console.warn('[content] 에러 페이지 감지: 로그인 필요 또는 접근 불가');
+      chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, loginRequired: true } });
+    } else if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
       console.warn('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
       chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, parseFailed: true } });
     } else {
