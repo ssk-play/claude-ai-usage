@@ -251,9 +251,13 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
 // ─── Status ───────────────────────────────────────────────
 async function refreshStatus() {
   const config = await chrome.storage.sync.get(['botToken', 'chatId', 'interval']);
-  const local = await chrome.storage.local.get(['prevState', 'lastCheck', 'lastAlert']);
+  const local = await chrome.storage.local.get(['prevState', 'lastCheck', 'lastAlert', 'loginRequired']);
   const el = document.getElementById('status');
   let html = '';
+
+  if (local.loginRequired) {
+    html += '<div class="status-warn">🔒 claude.ai 로그인이 필요합니다. 브라우저에서 로그인 후 다시 체크해주세요.</div>';
+  }
 
   if (!config.botToken || !config.chatId) {
     html += '<div class="status-warn">⚠️ Telegram 설정 필요 → 설정 탭</div>';
