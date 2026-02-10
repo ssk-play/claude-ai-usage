@@ -1,5 +1,5 @@
-const FIELDS = ['botToken', 'chatId', 'interval', 'reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'forceNotifyEnabled'];
-const DEFAULTS = { interval: 5, reporterName: '', trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false, forceNotifyEnabled: false };
+const FIELDS = ['botToken', 'chatId', 'interval', 'reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'trackAddOn', 'forceNotifyEnabled'];
+const DEFAULTS = { interval: 5, reporterName: '', trackSession: false, trackWeeklyAll: true, trackWeeklySonnet: false, trackAddOn: false, forceNotifyEnabled: false };
 
 // ─── Init: show settings tab first if not configured ──────
 (async () => {
@@ -33,6 +33,7 @@ chrome.storage.sync.get(FIELDS, (data) => {
   document.getElementById('trackSession').checked = data.trackSession ?? DEFAULTS.trackSession;
   document.getElementById('trackWeeklyAll').checked = data.trackWeeklyAll ?? DEFAULTS.trackWeeklyAll;
   document.getElementById('trackWeeklySonnet').checked = data.trackWeeklySonnet ?? DEFAULTS.trackWeeklySonnet;
+  document.getElementById('trackAddOn').checked = data.trackAddOn ?? DEFAULTS.trackAddOn;
   document.getElementById('forceNotifyEnabled').checked = data.forceNotifyEnabled ?? DEFAULTS.forceNotifyEnabled;
 
   // Show current Chat ID status if configured
@@ -131,6 +132,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       trackSession: document.getElementById('trackSession').checked,
       trackWeeklyAll: document.getElementById('trackWeeklyAll').checked,
       trackWeeklySonnet: document.getElementById('trackWeeklySonnet').checked,
+      trackAddOn: document.getElementById('trackAddOn').checked,
       forceNotifyEnabled: document.getElementById('forceNotifyEnabled').checked,
     };
 
@@ -201,12 +203,13 @@ document.getElementById('reportBtn').addEventListener('click', async () => {
     if (!prevState) throw new Error('저장된 데이터 없음. "지금 체크"를 먼저 눌러주세요.');
 
     const { prevPrevState } = await chrome.storage.local.get('prevPrevState');
-    const trackConfig = await chrome.storage.sync.get(['reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet']);
+    const trackConfig = await chrome.storage.sync.get(['reporterName', 'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet', 'trackAddOn']);
     const msg = buildReport('현황', prevState, prevPrevState, {
       reporterName: trackConfig.reporterName || '',
       trackSession: trackConfig.trackSession ?? false,
       trackWeeklyAll: trackConfig.trackWeeklyAll ?? true,
       trackWeeklySonnet: trackConfig.trackWeeklySonnet ?? false,
+      trackAddOn: trackConfig.trackAddOn ?? false,
     });
 
     const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
@@ -276,6 +279,12 @@ async function refreshStatus() {
     if (st.session) html += `<div class="model-row"><span class="model-name">session</span><span class="model-usage">${st.session}</span></div>`;
     if (st.weeklyAll) html += `<div class="model-row"><span class="model-name">weekly-all</span><span class="model-usage">${st.weeklyAll}</span></div>`;
     if (st.weeklySonnet != null) html += `<div class="model-row"><span class="model-name">weekly-sonnet</span><span class="model-usage">${st.weeklySonnet}</span></div>`;
+  }
+
+  if (st?.addOnEnabled || st?.addOnUsed || st?.addOnPercent || st?.addOnBalance) {
+    html += `<div style="margin-top:8px"><b>추가 사용량: ${st.addOnEnabled || '-'}</b></div>`;
+    if (st.addOnUsed) html += `<div class="model-row"><span class="model-name">사용금액</span><span class="model-usage">${st.addOnUsed} (${st.addOnPercent || '-'})</span></div>`;
+    if (st.addOnBalance) html += `<div class="model-row"><span class="model-name">잔액</span><span class="model-usage">${st.addOnBalance}</span></div>`;
   }
 
   el.innerHTML = html || '대기 중...';

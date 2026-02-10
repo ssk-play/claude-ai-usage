@@ -8,11 +8,15 @@
   const data = extractUsage();
   console.log('[content] Extracted:', JSON.stringify(data));
 
-  if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
-    console.warn('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
-    chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, parseFailed: true } });
-  } else {
-    chrome.runtime.sendMessage({ type: 'USAGE_DATA', data });
+  try {
+    if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
+      console.warn('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
+      chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, parseFailed: true } });
+    } else {
+      chrome.runtime.sendMessage({ type: 'USAGE_DATA', data });
+    }
+  } catch (e) {
+    console.warn('[content] sendMessage 실패 (확장 컨텍스트 무효화):', e.message);
   }
 })();
 
@@ -38,6 +42,10 @@ function extractUsage() {
     session: null,
     weeklyAll: null,
     weeklySonnet: null,
+    addOnEnabled: null,
+    addOnUsed: null,
+    addOnPercent: null,
+    addOnBalance: null,
     rawText: body.substring(0, 5000),
     timestamp: new Date().toISOString(),
   };
@@ -83,6 +91,52 @@ function extractUsage() {
         data.weeklyAll = pctVal;
       } else if (ctxLower.match(/sonnet/) && !ctxLower.match(/all/) && !data.weeklySonnet) {
         data.weeklySonnet = pctVal;
+      }
+    }
+  }
+
+  // ─── 추가 사용량 (Add-on Usage) 파싱 ───
+  // 토글 상태 감지: "추가 사용량" 텍스트 근처의 toggle/switch 요소
+  const addOnToggle = document.querySelector('button[role="switch"], input[type="checkbox"]');
+  const addOnSection = [...document.querySelectorAll('h2, h3, [class*="heading"]')]
+    .find(el => el.textContent?.match(/추가\s*사용량/));
+  if (addOnSection) {
+    const container = addOnSection.closest('section') || addOnSection.parentElement?.parentElement;
+    if (container) {
+      const toggle = container.querySelector('button[role="switch"], input[type="checkbox"]');
+      if (toggle) {
+        const isOn = toggle.getAttribute('aria-checked') === 'true'
+          || toggle.checked === true
+          || toggle.getAttribute('data-state') === 'checked';
+        data.addOnEnabled = isOn ? 'ON' : 'OFF';
+      }
+    }
+  }
+
+  const addOnIdx = lines.findIndex(l => l.match(/추가\s*사용량/));
+  if (addOnIdx !== -1) {
+    for (let i = addOnIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      // "US$0.00 사용" 패턴 → 사용금액
+      const usedMatch = line.match(/(US\$[\d,.]+)\s*사용/);
+      if (usedMatch && !data.addOnUsed) {
+        data.addOnUsed = usedMatch[1];
+      }
+      // "0% 사용" 패턴 → 퍼센티지
+      const pctMatch = line.match(/(\d+(?:\.\d+)?)\s*%\s*사용/);
+      if (pctMatch && !data.addOnPercent) {
+        data.addOnPercent = pctMatch[1] + '%';
+      }
+      // "현재 잔액" 패턴 → 잔액
+      if (line.match(/현재\s*잔액/)) {
+        // 잔액은 이전 라인 또는 같은 라인에서 US$ 패턴 찾기
+        for (let j = Math.max(addOnIdx, i - 3); j <= i; j++) {
+          const balMatch = lines[j].match(/(US\$[\d,.]+)/);
+          if (balMatch && balMatch[1] !== data.addOnUsed) {
+            data.addOnBalance = balMatch[1];
+            break;
+          }
+        }
       }
     }
   }

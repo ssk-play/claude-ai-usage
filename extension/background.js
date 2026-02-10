@@ -147,6 +147,10 @@ function detectChange(prev, curr, config) {
     { key: 'session',      track: 'trackSession' },
     { key: 'weeklyAll',    track: 'trackWeeklyAll' },
     { key: 'weeklySonnet', track: 'trackWeeklySonnet' },
+    { key: 'addOnEnabled', track: 'trackAddOn' },
+    { key: 'addOnUsed',    track: 'trackAddOn' },
+    { key: 'addOnPercent', track: 'trackAddOn' },
+    { key: 'addOnBalance', track: 'trackAddOn' },
   ];
   for (const { key, track } of trackMap) {
     if (config && !config[track]) continue;
@@ -165,8 +169,13 @@ function buildForceReport(data, reporterName) {
   let msg = `⚡ Force Check${name}\n⏰ ${now}\n\n`;
   msg += `📊 Session: ${data.session || '0%'}\n`;
   msg += `📊 All Models: ${data.weeklyAll || '0%'}\n`;
-  msg += `📊 Sonnet: ${data.weeklySonnet || '0%'}\n\n`;
-  msg += `✅ 정상 동작 중`;
+  msg += `📊 Sonnet: ${data.weeklySonnet || '0%'}\n`;
+  if (data.addOnEnabled || data.addOnUsed || data.addOnPercent || data.addOnBalance) {
+    msg += `\n💰 추가 사용량: ${data.addOnEnabled || '-'}\n`;
+    msg += `  사용: ${data.addOnUsed || '-'} (${data.addOnPercent || '-'})\n`;
+    msg += `  잔액: ${data.addOnBalance || '-'}\n`;
+  }
+  msg += `\n✅ 정상 동작 중`;
   return msg;
 }
 
@@ -228,6 +237,10 @@ async function appendHistory(data) {
     session: data.session || null,
     weeklyAll: data.weeklyAll || null,
     weeklySonnet: data.weeklySonnet || null,
+    addOnEnabled: data.addOnEnabled || null,
+    addOnUsed: data.addOnUsed || null,
+    addOnPercent: data.addOnPercent || null,
+    addOnBalance: data.addOnBalance || null,
   });
 
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -240,7 +253,7 @@ async function getConfig() {
   const data = await chrome.storage.sync.get([
     'botToken', 'chatId', 'interval', 'reporterName',
     'trackSession', 'trackWeeklyAll', 'trackWeeklySonnet',
-    'forceNotifyEnabled',
+    'trackAddOn', 'forceNotifyEnabled',
   ]);
   return {
     botToken: data.botToken || '',
@@ -250,6 +263,7 @@ async function getConfig() {
     trackSession: data.trackSession ?? false,
     trackWeeklyAll: data.trackWeeklyAll ?? true,
     trackWeeklySonnet: data.trackWeeklySonnet ?? false,
+    trackAddOn: data.trackAddOn ?? false,
     forceNotifyEnabled: data.forceNotifyEnabled ?? false,
   };
 }
