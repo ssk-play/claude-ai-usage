@@ -13,16 +13,16 @@
     const isErrorPage = /페이지를 찾을 수 없습니다|not found|page not found|홈으로 돌아가기/i.test(bodyText);
 
     if (isErrorPage) {
-      console.warn('[content] 페이지 이상 감지');
+      console.log('[content] 페이지 이상 감지');
       chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, pageUnavailable: true } });
     } else if (!data.weeklyAll && !data.weeklySonnet && !data.session) {
-      console.warn('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
+      console.log('[content] 파싱 실패: 사용량 데이터를 찾을 수 없음');
       chrome.runtime.sendMessage({ type: 'USAGE_DATA', data: { ...data, parseFailed: true } });
     } else {
       chrome.runtime.sendMessage({ type: 'USAGE_DATA', data });
     }
   } catch (e) {
-    console.warn('[content] sendMessage 실패 (확장 컨텍스트 무효화):', e.message);
+    console.log('[content] sendMessage 실패 (확장 컨텍스트 무효화):', e.message);
   }
 })();
 

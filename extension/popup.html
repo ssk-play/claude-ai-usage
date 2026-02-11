@@ -21,8 +21,8 @@
       </div>
 
       <div class="section btn-group">
-        <button id="checkBtn" class="primary">지금 체크</button>
-        <button id="reportBtn" class="secondary">📩 리포트 전송</button>
+        <input type="text" id="reporterName" placeholder="리포터 이름" />
+        <button id="reportBtn" class="primary">📩 리포트</button>
       </div>
 
       <div class="section">
@@ -50,33 +50,25 @@
         <div class="token-group">
           <input type="text" id="botToken" placeholder="123456:ABC-DEF..." />
           <button id="resetTokenBtn" class="reset-icon" title="초기화">✕</button>
+          <button id="verifyTokenBtn" class="verify-btn" title="토큰 검증">✔</button>
         </div>
         <label>Chat ID <span class="optional">(선택)</span></label>
         <input type="text" id="chatId" placeholder="@userinfobot으로 확인" />
-        <div class="help-text">미입력 시 자동 추출 (봇에 메시지 필요)</div>
         <div id="telegramStatus" class="help-text"></div>
       </div>
 
-      <div class="section">
-        <h2>리포터 이름</h2>
-        <input type="text" id="reporterName" placeholder="예: 회사맥북, 집PC..." />
-      </div>
 
       <div class="section">
         <h2>체크 간격</h2>
-        <div class="inline">
+        <div class="check-interval-row">
           <input type="number" id="interval" min="1" max="60" value="5" class="small" />
           <span>분</span>
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="toggle-row">
-          <span class="toggle-label">변동 없어도 주기적 알림</span>
+          <span style="width:10px"></span>
           <label class="toggle-switch">
             <input type="checkbox" id="forceNotifyEnabled" />
             <span class="toggle-slider"></span>
           </label>
+          <span class="toggle-label">항상 알림 전송</span>
         </div>
       </div>
 
@@ -100,10 +92,7 @@
         </label>
       </div>
 
-      <div class="section">
-        <button id="saveBtn" class="primary">저장</button>
-        <span id="saveStatus"></span>
-      </div>
+
     </div>
   </div>
 
